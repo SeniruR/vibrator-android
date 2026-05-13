@@ -52,6 +52,24 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     private val _audioError = MutableStateFlow<String?>(null)
     val audioError = _audioError.asStateFlow()
 
+    private val _audioNoiseGate = MutableStateFlow(12)
+    val audioNoiseGate = _audioNoiseGate.asStateFlow()
+
+    private val _audioOnsetThreshold = MutableStateFlow(20)
+    val audioOnsetThreshold = _audioOnsetThreshold.asStateFlow()
+
+    private val _audioSustainedThreshold = MutableStateFlow(50)
+    val audioSustainedThreshold = _audioSustainedThreshold.asStateFlow()
+
+    private val _audioSmoothing = MutableStateFlow(20)
+    val audioSmoothing = _audioSmoothing.asStateFlow()
+
+    private val _audioPeakDecay = MutableStateFlow(98)
+    val audioPeakDecay = _audioPeakDecay.asStateFlow()
+
+    private val _audioBeatHoldoff = MutableStateFlow(110)
+    val audioBeatHoldoff = _audioBeatHoldoff.asStateFlow()
+
     fun setAmplitude(v: Int) {
         _amplitude.value = v.coerceIn(0, 255)
         // clear any queued vibrations for safety
@@ -86,6 +104,36 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     fun setAudioVibrateEnabled(enabled: Boolean) {
         _audioVibrateEnabled.value = enabled
         audioHaptic.setVibrateFromAudio(enabled)
+    }
+
+    fun setAudioNoiseGate(value: Int) {
+        _audioNoiseGate.value = value.coerceIn(0, 40)
+        pushAudioTuning()
+    }
+
+    fun setAudioOnsetThreshold(value: Int) {
+        _audioOnsetThreshold.value = value.coerceIn(1, 50)
+        pushAudioTuning()
+    }
+
+    fun setAudioSustainedThreshold(value: Int) {
+        _audioSustainedThreshold.value = value.coerceIn(1, 100)
+        pushAudioTuning()
+    }
+
+    fun setAudioSmoothing(value: Int) {
+        _audioSmoothing.value = value.coerceIn(5, 80)
+        pushAudioTuning()
+    }
+
+    fun setAudioPeakDecay(value: Int) {
+        _audioPeakDecay.value = value.coerceIn(80, 99)
+        pushAudioTuning()
+    }
+
+    fun setAudioBeatHoldoff(value: Int) {
+        _audioBeatHoldoff.value = value.coerceIn(60, 250)
+        pushAudioTuning()
     }
 
     fun loadAudio(uri: Uri) {
@@ -166,6 +214,17 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     private fun handleAudioLevel(@Suppress("UNUSED_PARAMETER") level: Int) {
         // This is now handled entirely by AudioHapticController
         // so we don't double-vibrate or interfere with audio tracking
+    }
+
+    private fun pushAudioTuning() {
+        audioHaptic.updateTuning(
+            noiseGate = _audioNoiseGate.value.toDouble(),
+            onsetThreshold = _audioOnsetThreshold.value,
+            sustainedThreshold = _audioSustainedThreshold.value,
+            smoothingAlpha = _audioSmoothing.value / 100.0,
+            peakDecay = _audioPeakDecay.value / 100.0,
+            beatHoldoffMs = _audioBeatHoldoff.value.toLong(),
+        )
     }
 
     override fun onCleared() {

@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.LinearProgressIndicator
@@ -44,6 +46,12 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val audioVibrateEnabled by viewModel.audioVibrateEnabled.collectAsState()
     val audioLevel by viewModel.audioLevel.collectAsState()
     val audioError by viewModel.audioError.collectAsState()
+    val audioNoiseGate by viewModel.audioNoiseGate.collectAsState()
+    val audioOnsetThreshold by viewModel.audioOnsetThreshold.collectAsState()
+    val audioSustainedThreshold by viewModel.audioSustainedThreshold.collectAsState()
+    val audioSmoothing by viewModel.audioSmoothing.collectAsState()
+    val audioPeakDecay by viewModel.audioPeakDecay.collectAsState()
+    val audioBeatHoldoff by viewModel.audioBeatHoldoff.collectAsState()
 
     val recordAudioGranted =
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -63,6 +71,7 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -100,6 +109,54 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                     }
                 },
             )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            ControlBlock(
+                title = "Audio Sensitivity",
+                valueText = "Noise gate: $audioNoiseGate | Onset: $audioOnsetThreshold | Sustain: $audioSustainedThreshold",
+                helperText = "Adjust while audio is playing. Higher values reduce false triggers from fans/background noise.",
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.material3.Slider(
+                        value = audioNoiseGate.toFloat(),
+                        onValueChange = { viewModel.setAudioNoiseGate(it.toInt()) },
+                        valueRange = 0f..40f,
+                    )
+                    Text("Noise gate")
+                    androidx.compose.material3.Slider(
+                        value = audioOnsetThreshold.toFloat(),
+                        onValueChange = { viewModel.setAudioOnsetThreshold(it.toInt()) },
+                        valueRange = 1f..50f,
+                    )
+                    Text("Bass onset threshold")
+                    androidx.compose.material3.Slider(
+                        value = audioSustainedThreshold.toFloat(),
+                        onValueChange = { viewModel.setAudioSustainedThreshold(it.toInt()) },
+                        valueRange = 1f..100f,
+                    )
+                    Text("Sustained tone threshold")
+                    androidx.compose.material3.Slider(
+                        value = audioSmoothing.toFloat(),
+                        onValueChange = { viewModel.setAudioSmoothing(it.toInt()) },
+                        valueRange = 5f..80f,
+                    )
+                    Text("Smoothing")
+                    androidx.compose.material3.Slider(
+                        value = audioPeakDecay.toFloat(),
+                        onValueChange = { viewModel.setAudioPeakDecay(it.toInt()) },
+                        valueRange = 80f..99f,
+                    )
+                    Text("Peak decay")
+
+                    androidx.compose.material3.Slider(
+                        value = audioBeatHoldoff.toFloat(),
+                        onValueChange = { viewModel.setAudioBeatHoldoff(it.toInt()) },
+                        valueRange = 60f..250f,
+                    )
+                    Text("Beat holdoff")
+                }
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 

@@ -35,6 +35,35 @@ class AudioHapticController(
     private var lastLevel = 0
     private var lastPulseTime = 0L
     private var recentPeak = 0  // Track recent peak for better onset detection
+    // Smoothing / noise-gating to avoid false triggers from background noise
+    private var smoothedLevel = 0.0
+    private var noiseFloor = 0.0
+    @Volatile private var noiseGate = 12.0
+    @Volatile private var onsetThreshold = 20
+    @Volatile private var sustainedThreshold = 50
+    @Volatile private var smoothingAlpha = 0.2
+    @Volatile private var peakDecay = 0.98
+    @Volatile private var beatHoldoffMs = 110L
+
+    fun updateTuning(
+        noiseGate: Double,
+        onsetThreshold: Int,
+        sustainedThreshold: Int,
+        smoothingAlpha: Double,
+        peakDecay: Double,
+        beatHoldoffMs: Long,
+    ) {
+        this.noiseGate = noiseGate.coerceIn(0.0, 40.0)
+        this.onsetThreshold = onsetThreshold.coerceIn(1, 50)
+        this.sustainedThreshold = sustainedThreshold.coerceIn(1, 100)
+        this.smoothingAlpha = smoothingAlpha.coerceIn(0.05, 0.8)
+        this.peakDecay = peakDecay.coerceIn(0.80, 0.999)
+        this.beatHoldoffMs = beatHoldoffMs.coerceIn(60L, 250L)
+        Log.d(
+            TAG,
+            "updateTuning noiseGate=${this.noiseGate} onset=${this.onsetThreshold} sustained=${this.sustainedThreshold} smoothing=${this.smoothingAlpha} peakDecay=${this.peakDecay} holdoff=${this.beatHoldoffMs}",
+        )
+    }
     
     private val pollingScope = CoroutineScope(Dispatchers.Default)
     private var pollingJob: Job? = null
@@ -270,55 +299,62 @@ class AudioHapticController(
 
     private fun driveLevel(level: Int) {
         Log.d(TAG, "driveLevel called level=$level lastLevel=$lastLevel recentPeak=$recentPeak")
-        if (!vibrateGate.canExecute()) {
-            return
-        }
 
-        val clamped = level.coerceIn(0, 100)
-        if (clamped <= 5) {
-            hapticController.cancel()
-            lastLevel = 0
-            recentPeak = (recentPeak * 0.95).toInt()  // Decay peak slowly
-            return
-        }
+        if (!vibrateGate.canExecute()) return
 
         val now = System.currentTimeMillis()
+        val sinceLastPulse = now - lastPulseTime
+
+        // smoothing to reduce jitter (simple low-pass)
+        smoothedLevel = smoothedLevel * (1.0 - smoothingAlpha) + level * smoothingAlpha
+
+        // update noise floor slowly (tracks ambient background level)
+        noiseFloor = noiseFloor * 0.995 + smoothedLevel * 0.005
+
+        val effective = (smoothedLevel - noiseFloor).coerceAtLeast(0.0)
+
+        // gate tiny background noise
+        if (effective < noiseGate) {
+            hapticController.cancel()
+            lastLevel = smoothedLevel.toInt()
+            recentPeak = (recentPeak * 0.95).toInt()
+            return
+        }
+
+        val clamped = smoothedLevel.roundToInt().coerceIn(0, 100)
         val levelChange = clamped - lastLevel
         val peakDrop = recentPeak - clamped
-        
-        // Detect sudden onset (bass hit): level jumps up quickly AND previous peak has decayed
-        val isBassOnset = levelChange > 12 && (peakDrop > 10 || recentPeak < 40)
-        
-        // Detect sustained high tone: level is high and steady
-        val isSustained = clamped > 45 && lastLevel > 35
 
-        // Update peak tracking
-        if (clamped > recentPeak) {
-            recentPeak = clamped
-        } else {
-            recentPeak = (recentPeak * 0.98).toInt()  // Slow decay to smooth out peaks
+        // Beat-first behavior: if pulses are too close together, ignore them unless they are very strong.
+        val isWithinHoldoff = sinceLastPulse in 0 until beatHoldoffMs
+
+        // reduced sensitivity: require larger onsets for bass hits
+        val isBassOnset = levelChange > onsetThreshold && (peakDrop > 12 || recentPeak < 45)
+        val isStrongTransient = levelChange > onsetThreshold + 8 && effective > (noiseGate + 8)
+        val isSustained = effective > sustainedThreshold && lastLevel > 35
+
+        if (isWithinHoldoff && !isStrongTransient) {
+            lastLevel = clamped
+            recentPeak = (recentPeak * peakDecay).toInt()
+            return
         }
 
-        val amplitude = if (hapticController.hasAmplitudeControl()) {
-            (20 + clamped * 235 / 100).coerceIn(1, 255)
-        } else {
-            255
-        }
+        // Update peak tracking (decays slowly)
+        if (clamped > recentPeak) recentPeak = clamped else recentPeak = (recentPeak * peakDecay).toInt()
+
+        val amplitude = if (hapticController.hasAmplitudeControl()) (20 + clamped * 235 / 100).coerceIn(1, 255) else 255
 
         hapticController.cancel()
 
-        // Adaptive pulse strategy for pop music:
-        // - Bass onset (kick drums) = short snappy pulse
-        // - Sustained tones (pads, strings) = longer rumble
-        // - Mid-range steady = balanced pulse
         val onMs = when {
-            isBassOnset -> 15L      // Very snappy for bass hits
-            isSustained -> 70L      // Longer rumble for sustained notes
-            clamped > 60 -> 45L     // High levels = moderate pulse
-            clamped > 40 -> 30L     // Mid levels = medium pulse
-            else -> 20L             // Low levels = light ticks
+            isStrongTransient -> 16L
+            isBassOnset -> 18L
+            isSustained -> 80L
+            clamped > 65 -> 45L
+            clamped > 45 -> 30L
+            else -> 20L
         }
-        val offMs = maxOf(8L, 120L - onMs)
+        val offMs = maxOf(20L, beatHoldoffMs - onMs)
 
         hapticController.vibrateWaveform(
             timings = longArrayOf(onMs, offMs),
