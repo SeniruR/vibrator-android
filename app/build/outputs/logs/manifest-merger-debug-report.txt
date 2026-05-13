@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:1:1-17:12
-INJECTED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:1:1-17:12
-INJECTED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:1:1-17:12
-INJECTED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:1:1-17:12
+ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:1:1-18:12
+INJECTED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:1:1-18:12
+INJECTED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:1:1-18:12
+INJECTED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:1:1-18:12
 MERGED from [androidx.compose.material3:material3:1.1.0] C:\Users\senir\.gradle\caches\transforms-3\f454496b72dffd6fd46e6c353c409b72\transformed\jetified-material3-1.1.0\AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.compose.material:material-ripple:1.4.1] C:\Users\senir\.gradle\caches\transforms-3\6d36bab4145323c6ecd583f092f0c19a\transformed\jetified-material-ripple-1.4.1\AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.compose.material:material-icons-core:1.4.1] C:\Users\senir\.gradle\caches\transforms-3\dd2465cdb439ed737329b3ff720c04af\transformed\jetified-material-icons-core-1.4.1\AndroidManifest.xml:17:1-22:12
@@ -56,9 +56,13 @@ uses-permission#android.permission.VIBRATE
 ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:3:5-66
 	android:name
 		ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:3:22-63
+uses-permission#android.permission.RECORD_AUDIO
+ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:4:5-71
+	android:name
+		ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:4:22-68
 application
-ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:5:5-16:19
-INJECTED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:5:5-16:19
+ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:6:5-17:19
+INJECTED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:6:5-17:19
 MERGED from [androidx.emoji2:emoji2:1.4.0] C:\Users\senir\.gradle\caches\transforms-3\4c899c30ce15bdcac62ec7eadf6a1dd0\transformed\jetified-emoji2-1.4.0\AndroidManifest.xml:23:5-33:19
 MERGED from [androidx.emoji2:emoji2:1.4.0] C:\Users\senir\.gradle\caches\transforms-3\4c899c30ce15bdcac62ec7eadf6a1dd0\transformed\jetified-emoji2-1.4.0\AndroidManifest.xml:23:5-33:19
 MERGED from [androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\senir\.gradle\caches\transforms-3\056d500eb3539110760ce257eae036fb\transformed\jetified-lifecycle-process-2.6.1\AndroidManifest.xml:23:5-33:19
@@ -76,27 +80,27 @@ MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\senir\.gradle\cach
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.12.0] C:\Users\senir\.gradle\caches\transforms-3\af1b2afc860af4741d62dbaf7c785acc\transformed\core-1.12.0\AndroidManifest.xml:28:18-86
 	android:supportsRtl
-		ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:8:9-35
+		ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:9:9-35
 	android:label
-		ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:7:9-49
+		ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:8:9-49
 	android:allowBackup
-		ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:6:9-35
+		ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:7:9-35
 activity#com.example.haptictester.MainActivity
-ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:9:9-15:20
+ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:10:9-16:20
 	android:exported
-		ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:10:13-36
+		ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:11:13-36
 	android:name
-		ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:9:19-47
+		ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:10:19-47
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:11:13-14:29
+ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:12:13-15:29
 action#android.intent.action.MAIN
-ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:12:17-69
+ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:13:17-69
 	android:name
-		ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:12:25-66
+		ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:13:25-66
 category#android.intent.category.LAUNCHER
-ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:13:17-77
+ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:14:17-77
 	android:name
-		ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:13:27-74
+		ADDED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml:14:27-74
 uses-sdk
 INJECTED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from D:\Projects\vibrator-android\app\src\main\AndroidManifest.xml

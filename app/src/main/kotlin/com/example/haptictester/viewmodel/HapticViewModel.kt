@@ -1,6 +1,7 @@
 package com.example.haptictester.viewmodel
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
@@ -8,11 +9,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.example.haptictester.haptic.AudioHapticController
 import com.example.haptictester.haptic.HapticController
 import com.example.haptictester.haptic.ThrottleGate
 
 class HapticViewModel(application: Application) : AndroidViewModel(application) {
     private val haptic = HapticController(application.applicationContext)
+    private val audioHaptic = AudioHapticController(application.applicationContext, haptic)
     private val gate = ThrottleGate(100L)
     private var liveUpdateJob: Job? = null
 
@@ -34,6 +37,21 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     private val _hasVibrator = MutableStateFlow(haptic.hasVibrator())
     val hasVibrator = _hasVibrator.asStateFlow()
 
+    private val _selectedAudioName = MutableStateFlow<String?>(null)
+    val selectedAudioName = _selectedAudioName.asStateFlow()
+
+    private val _audioPlaying = MutableStateFlow(false)
+    val audioPlaying = _audioPlaying.asStateFlow()
+
+    private val _audioVibrateEnabled = MutableStateFlow(true)
+    val audioVibrateEnabled = _audioVibrateEnabled.asStateFlow()
+
+    private val _audioLevel = MutableStateFlow(0)
+    val audioLevel = _audioLevel.asStateFlow()
+
+    private val _audioError = MutableStateFlow<String?>(null)
+    val audioError = _audioError.asStateFlow()
+
     fun setAmplitude(v: Int) {
         _amplitude.value = v.coerceIn(0, 255)
         // clear any queued vibrations for safety
@@ -52,6 +70,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
 
     fun startTest() {
         if (!_hasVibrator.value) return
+        if (_audioPlaying.value) return
         if (!gate.canExecute()) return
         _isTesting.value = true
         requestLiveUpdate()
@@ -62,6 +81,60 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         liveUpdateJob = null
         haptic.cancel()
         _isTesting.value = false
+    }
+
+    fun setAudioVibrateEnabled(enabled: Boolean) {
+        _audioVibrateEnabled.value = enabled
+        audioHaptic.setVibrateFromAudio(enabled)
+    }
+
+    fun loadAudio(uri: Uri) {
+        val app = getApplication<Application>()
+        try {
+            app.contentResolver.takePersistableUriPermission(
+                uri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        } catch (_: SecurityException) {
+            // temporary permission is enough for this session
+        }
+
+        val displayName = audioHaptic.load(
+            uri = uri,
+            vibrateFromAudio = _audioVibrateEnabled.value,
+            onLevel = { level ->
+                _audioLevel.value = level
+                handleAudioLevel(level)
+            },
+            onEnded = {
+                _audioPlaying.value = false
+            },
+            onError = { message ->
+                _audioError.value = message
+            }
+        )
+        _selectedAudioName.value = displayName
+        _audioError.value = null
+        _audioPlaying.value = false
+    }
+
+    fun playAudio() {
+        stopTest()
+        audioHaptic.play()
+        _audioPlaying.value = true
+    }
+
+    fun pauseAudio() {
+        audioHaptic.pause()
+        _audioPlaying.value = false
+        haptic.cancel()
+    }
+
+    fun stopAudio() {
+        audioHaptic.stop()
+        _audioPlaying.value = false
+        _audioLevel.value = 0
+        haptic.cancel()
     }
 
     private fun requestLiveUpdate() {
@@ -90,7 +163,35 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private fun handleAudioLevel(level: Int) {
+        if (!_audioPlaying.value || !_audioVibrateEnabled.value) {
+            return
+        }
+
+        val clamped = level.coerceIn(0, 100)
+        if (clamped <= 2) {
+            haptic.cancel()
+            return
+        }
+
+        if (!gate.canExecute()) {
+            return
+        }
+
+        val onMs = (15L + (clamped * 85L / 100L)).coerceIn(10L, 100L)
+        val offMs = (100L - onMs).coerceAtLeast(10L)
+        val amplitude = if (haptic.hasAmplitudeControl()) {
+            (20 + clamped * 235 / 100).coerceIn(1, 255)
+        } else {
+            255
+        }
+
+        haptic.cancel()
+        haptic.vibrateWaveform(longArrayOf(onMs, offMs), intArrayOf(amplitude, 0), -1)
+    }
+
     override fun onCleared() {
+        audioHaptic.release()
         stopTest()
         super.onCleared()
     }
