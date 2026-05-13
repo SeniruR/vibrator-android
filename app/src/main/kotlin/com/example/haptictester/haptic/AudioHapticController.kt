@@ -23,10 +23,21 @@ class AudioHapticController(
     private val context: Context,
     private val hapticController: HapticController,
 ) {
+    data class HapticPulseDebug(
+        val level: Int,
+        val onMs: Long,
+        val offMs: Long,
+        val amplitude: Int,
+        val isBassOnset: Boolean,
+        val isSustained: Boolean,
+        val timestampMs: Long = System.currentTimeMillis(),
+    )
+
     private val TAG = "AudioHapticController"
     private var mediaPlayer: MediaPlayer? = null
     private var visualizer: Visualizer? = null
     private var onLevelCallback: ((Int) -> Unit)? = null
+    private var onPulseCallback: ((HapticPulseDebug) -> Unit)? = null
     private var onEndedCallback: (() -> Unit)? = null
     private var onErrorCallback: ((Throwable) -> Unit)? = null
     private var vibrateGate = ThrottleGate(10L)  // Minimal throttle; polling is already frequent
@@ -77,12 +88,14 @@ class AudioHapticController(
         uri: Uri,
         vibrateFromAudio: Boolean,
         onLevel: (Int) -> Unit,
+        onPulse: (HapticPulseDebug) -> Unit,
         onEnded: () -> Unit,
         onError: (String) -> Unit,
     ): String {
         release()
         this.vibrateFromAudio = vibrateFromAudio
         onLevelCallback = onLevel
+        onPulseCallback = onPulse
         onEndedCallback = onEnded
         onErrorCallback = { ex -> onError(ex.toString()) }
         currentLabel = resolveDisplayName(uri)
@@ -356,10 +369,29 @@ class AudioHapticController(
         }
         val offMs = maxOf(20L, beatHoldoffMs - onMs)
 
-        hapticController.vibrateWaveform(
-            timings = longArrayOf(onMs, offMs),
-            amplitudes = intArrayOf(amplitude, 0),
-            repeat = -1,
+        // For sustained audio, use a continuous one-shot vibration instead
+        // of a repeating short waveform. This prevents the motor from
+        // sounding like sparks and gives a steadier rumble.
+        if (isSustained) {
+            val continuousMs = maxOf(300L, onMs * 4)
+            hapticController.vibrateOneShot(continuousMs, amplitude)
+        } else {
+            hapticController.vibrateWaveform(
+                timings = longArrayOf(onMs, offMs),
+                amplitudes = intArrayOf(amplitude, 0),
+                repeat = -1,
+            )
+        }
+        onPulseCallback?.invoke(
+            HapticPulseDebug(
+                level = clamped,
+                onMs = onMs,
+                offMs = offMs,
+                amplitude = amplitude,
+                isBassOnset = isBassOnset || isStrongTransient,
+                isSustained = isSustained,
+                timestampMs = now,
+            )
         )
 
         lastLevel = clamped

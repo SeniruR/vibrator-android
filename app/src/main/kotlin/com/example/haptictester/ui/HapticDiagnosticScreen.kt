@@ -13,8 +13,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.LinearProgressIndicator
@@ -31,6 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.haptictester.viewmodel.HapticViewModel
+import com.example.haptictester.viewmodel.AudioDebugFrame
 
 @Composable
 fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
@@ -52,6 +59,7 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val audioSmoothing by viewModel.audioSmoothing.collectAsState()
     val audioPeakDecay by viewModel.audioPeakDecay.collectAsState()
     val audioBeatHoldoff by viewModel.audioBeatHoldoff.collectAsState()
+    val audioDebugFrames by viewModel.audioDebugFrames.collectAsState()
 
     val recordAudioGranted =
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -108,6 +116,12 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                         viewModel.setAudioVibrateEnabled(enabled)
                     }
                 },
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            DebugTimelineCard(
+                frames = audioDebugFrames,
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -333,6 +347,96 @@ private fun ControlBlock(
             slider()
             Spacer(modifier = Modifier.height(6.dp))
             Text(helperText, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun DebugTimelineCard(
+    frames: List<AudioDebugFrame>,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text("Debug Timeline", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Top line = audio envelope. Bars = moments when haptic vibration is generated.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp),
+            ) {
+                val width = size.width
+                val height = size.height
+                drawRect(Color(0xFFF7F3FB), size = Size(width, height))
+
+                val samples = frames.takeLast(120)
+                if (samples.isEmpty()) return@Canvas
+
+                val stepX = if (samples.size > 1) width / (samples.size - 1) else width
+                val midY = height * 0.68f
+                val graphHeight = height * 0.58f
+
+                // baseline and grid
+                drawLine(
+                    color = Color(0xFFD9D2E8),
+                    start = Offset(0f, midY),
+                    end = Offset(width, midY),
+                    strokeWidth = 2f,
+                    cap = StrokeCap.Round,
+                )
+                for (i in 0..4) {
+                    val y = height * (0.12f + i * 0.12f)
+                    drawLine(
+                        color = Color(0xFFEAE4F4),
+                        start = Offset(0f, y),
+                        end = Offset(width, y),
+                        strokeWidth = 1f,
+                    )
+                }
+
+                val points = samples.mapIndexed { index, frame ->
+                    val x = index * stepX
+                    val normalized = (frame.level.coerceIn(0, 100) / 100f)
+                    val y = midY - (normalized * graphHeight)
+                    Offset(x, y)
+                }
+
+                for (i in 0 until points.lastIndex) {
+                    drawLine(
+                        color = Color(0xFF6B4BB5),
+                        start = points[i],
+                        end = points[i + 1],
+                        strokeWidth = 4f,
+                        cap = StrokeCap.Round,
+                    )
+                }
+
+                points.forEach { point ->
+                    drawCircle(Color(0xFF8E63D6), radius = 3f, center = point)
+                }
+
+                samples.forEachIndexed { index, frame ->
+                    val pulse = frame.pulse ?: return@forEachIndexed
+                    val x = index * stepX
+                    val barTop = height * 0.10f
+                    val barBottom = height * 0.95f
+                    val barColor = if (pulse.isBass) Color(0xFFFF7043) else if (pulse.isSustained) Color(0xFF26A69A) else Color(0xFF7E57C2)
+                    drawLine(
+                        color = barColor,
+                        start = Offset(x, barBottom),
+                        end = Offset(x, barTop),
+                        strokeWidth = 6f,
+                        cap = StrokeCap.Round,
+                    )
+                    drawCircle(barColor, radius = 6f, center = Offset(x, barTop + 8f))
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Purple line = audio level history. Orange bars = bass hits. Teal bars = sustained rumble.", style = MaterialTheme.typography.bodySmall)
         }
     }
 }

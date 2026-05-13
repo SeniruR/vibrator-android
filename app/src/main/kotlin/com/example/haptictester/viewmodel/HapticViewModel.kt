@@ -10,8 +10,24 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import com.example.haptictester.haptic.AudioHapticController
+import com.example.haptictester.haptic.AudioHapticController.HapticPulseDebug
 import com.example.haptictester.haptic.HapticController
 import com.example.haptictester.haptic.ThrottleGate
+
+data class AudioDebugPulse(
+    val sampleIndex: Int,
+    val level: Int,
+    val onMs: Long,
+    val offMs: Long,
+    val amplitude: Int,
+    val isBass: Boolean,
+    val isSustained: Boolean,
+)
+
+data class AudioDebugFrame(
+    val level: Int,
+    val pulse: AudioDebugPulse? = null,
+)
 
 class HapticViewModel(application: Application) : AndroidViewModel(application) {
     private val haptic = HapticController(application.applicationContext)
@@ -51,6 +67,9 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _audioError = MutableStateFlow<String?>(null)
     val audioError = _audioError.asStateFlow()
+
+    private val _audioDebugFrames = MutableStateFlow<List<AudioDebugFrame>>(emptyList())
+    val audioDebugFrames = _audioDebugFrames.asStateFlow()
 
     private val _audioNoiseGate = MutableStateFlow(12)
     val audioNoiseGate = _audioNoiseGate.asStateFlow()
@@ -138,6 +157,8 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
 
     fun loadAudio(uri: Uri) {
         val app = getApplication<Application>()
+        _audioDebugFrames.value = emptyList()
+        _audioLevel.value = 0
         try {
             app.contentResolver.takePersistableUriPermission(
                 uri,
@@ -152,7 +173,11 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
             vibrateFromAudio = _audioVibrateEnabled.value,
             onLevel = { level ->
                 _audioLevel.value = level
+                appendAudioHistory(level)
                 handleAudioLevel(level)
+            },
+            onPulse = { pulse ->
+                appendPulseHistory(pulse)
             },
             onEnded = {
                 _audioPlaying.value = false
@@ -183,6 +208,30 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         _audioPlaying.value = false
         _audioLevel.value = 0
         haptic.cancel()
+    }
+
+    private fun appendAudioHistory(level: Int) {
+        val next = (_audioDebugFrames.value + AudioDebugFrame(level = level)).takeLast(120)
+        _audioDebugFrames.value = next
+    }
+
+    private fun appendPulseHistory(pulse: HapticPulseDebug) {
+        val framePulse = AudioDebugPulse(
+            sampleIndex = 0,
+            level = pulse.level,
+            onMs = pulse.onMs,
+            offMs = pulse.offMs,
+            amplitude = pulse.amplitude,
+            isBass = pulse.isBassOnset,
+            isSustained = pulse.isSustained,
+        )
+        val current = _audioDebugFrames.value
+        val next = if (current.isEmpty()) {
+            listOf(AudioDebugFrame(level = pulse.level, pulse = framePulse))
+        } else {
+            current.dropLast(1) + current.last().copy(pulse = framePulse)
+        }.takeLast(120)
+        _audioDebugFrames.value = next
     }
 
     private fun requestLiveUpdate() {
