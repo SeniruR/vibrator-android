@@ -163,31 +163,9 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private fun handleAudioLevel(level: Int) {
-        if (!_audioPlaying.value || !_audioVibrateEnabled.value) {
-            return
-        }
-
-        val clamped = level.coerceIn(0, 100)
-        if (clamped <= 2) {
-            haptic.cancel()
-            return
-        }
-
-        if (!gate.canExecute()) {
-            return
-        }
-
-        val onMs = (15L + (clamped * 85L / 100L)).coerceIn(10L, 100L)
-        val offMs = (100L - onMs).coerceAtLeast(10L)
-        val amplitude = if (haptic.hasAmplitudeControl()) {
-            (20 + clamped * 235 / 100).coerceIn(1, 255)
-        } else {
-            255
-        }
-
-        haptic.cancel()
-        haptic.vibrateWaveform(longArrayOf(onMs, offMs), intArrayOf(amplitude, 0), -1)
+    private fun handleAudioLevel(@Suppress("UNUSED_PARAMETER") level: Int) {
+        // This is now handled entirely by AudioHapticController
+        // so we don't double-vibrate or interfere with audio tracking
     }
 
     override fun onCleared() {

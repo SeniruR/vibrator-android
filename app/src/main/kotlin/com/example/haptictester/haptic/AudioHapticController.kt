@@ -18,9 +18,11 @@ class AudioHapticController(
     private var onLevelCallback: ((Int) -> Unit)? = null
     private var onEndedCallback: (() -> Unit)? = null
     private var onErrorCallback: ((String) -> Unit)? = null
-    private var vibrateGate = ThrottleGate(100L)
+    private var vibrateGate = ThrottleGate(30L)  // Reduced to 30ms for audio responsiveness
     private var currentLabel: String = ""
     private var vibrateFromAudio = true
+    private var lastLevel = 0
+    private var lastPulseTime = 0L
 
     fun setVibrateFromAudio(enabled: Boolean) {
         vibrateFromAudio = enabled
@@ -170,19 +172,45 @@ class AudioHapticController(
         }
 
         val clamped = level.coerceIn(0, 100)
-        val onMs = (15L + (clamped * 85L / 100L)).coerceIn(10L, 100L)
-        val offMs = (100L - onMs).coerceAtLeast(10L)
+        if (clamped <= 2) {
+            hapticController.cancel()
+            lastLevel = 0
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        val levelChange = clamped - lastLevel
+        val isFastRise = levelChange > 15  // Sudden peak = bass/transient
+        val isSustained = clamped > 50 && lastLevel > 40  // Steady high level = pad/tone
+
         val amplitude = if (hapticController.hasAmplitudeControl()) {
             (20 + clamped * 235 / 100).coerceIn(1, 255)
         } else {
             255
         }
+
         hapticController.cancel()
+
+        // Adaptive pulse:
+        // - Fast rise (bass hit) = short snappy pulse
+        // - Sustained high = longer continuous rumble
+        // - Low steady = soft ticking
+        val onMs = when {
+            isFastRise -> 20L  // Sharp, quick hit for bass
+            isSustained -> 60L  // Longer pulse for sustained tones
+            clamped > 60 -> 40L
+            else -> 25L
+        }
+        val offMs = maxOf(10L, 100L - onMs)  // Responsive off-time
+
         hapticController.vibrateWaveform(
             timings = longArrayOf(onMs, offMs),
             amplitudes = intArrayOf(amplitude, 0),
             repeat = -1,
         )
+
+        lastLevel = clamped
+        lastPulseTime = now
     }
 
     private fun calculateLevel(waveform: ByteArray): Int {
