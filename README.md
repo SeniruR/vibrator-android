@@ -9,6 +9,12 @@ Quick start:
 3. Connect your Samsung A04 with USB debugging enabled.
 4. Run the `app` configuration.
 
+in vscode, use below ps commands.
+1. .\build.ps1
+2. connect android device in debugging state
+3. adb install -r .\app\build\outputs\apk\debug\app-debug.apk
+
+
 Notes:
 - This project targets Android API 31+. Adjust `minSdk` in `app/build.gradle.kts` if needed.
 - The app calls `vibrator.cancel()` before issuing new commands and enforces a 100ms throttle (max ~10Hz).
