@@ -27,7 +27,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -51,7 +50,6 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val hasVibrator by viewModel.hasVibrator.collectAsState()
     val selectedAudioName by viewModel.selectedAudioName.collectAsState()
     val audioPlaying by viewModel.audioPlaying.collectAsState()
-    val audioVibrateEnabled by viewModel.audioVibrateEnabled.collectAsState()
     val audioLevel by viewModel.audioLevel.collectAsState()
     val audioError by viewModel.audioError.collectAsState()
     val audioSensitivityLevel by viewModel.audioSensitivityLevel.collectAsState()
@@ -92,7 +90,6 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
             AudioBlock(
                 selectedAudioName = selectedAudioName,
                 audioPlaying = audioPlaying,
-                audioVibrateEnabled = audioVibrateEnabled,
                 recordAudioGranted = recordAudioGranted,
                 audioLevel = audioLevel,
                 audioError = audioError,
@@ -109,13 +106,6 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                 },
                 onPauseAudio = { viewModel.pauseAudio() },
                 onStopAudio = { viewModel.stopAudio() },
-                onToggleVibrateFromAudio = { enabled ->
-                    if (!recordAudioGranted && enabled) {
-                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                    } else {
-                        viewModel.setAudioVibrateEnabled(enabled)
-                    }
-                },
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -231,7 +221,6 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
 private fun AudioBlock(
     selectedAudioName: String?,
     audioPlaying: Boolean,
-    audioVibrateEnabled: Boolean,
     recordAudioGranted: Boolean,
     audioLevel: Int,
     audioError: String?,
@@ -242,7 +231,6 @@ private fun AudioBlock(
     onPlayAudio: () -> Unit,
     onPauseAudio: () -> Unit,
     onStopAudio: () -> Unit,
-    onToggleVibrateFromAudio: (Boolean) -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -267,18 +255,6 @@ private fun AudioBlock(
                 Button(onClick = onPlayAudio, enabled = selectedAudioName != null && !audioPlaying && !audioAnalyzing) { Text("Play") }
                 Button(onClick = onPauseAudio, enabled = audioPlaying) { Text("Pause") }
                 Button(onClick = onStopAudio, enabled = selectedAudioName != null) { Text("Stop") }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Switch(
-                    checked = audioVibrateEnabled,
-                    onCheckedChange = onToggleVibrateFromAudio,
-                    enabled = recordAudioGranted,
-                )
-                Text(if (audioVibrateEnabled) "Vibrate from audio ON" else "Vibrate from audio OFF")
             }
             if (!recordAudioGranted) {
                 Spacer(modifier = Modifier.height(4.dp))
@@ -332,14 +308,21 @@ private fun DebugTimelineCard(
             Text("Debug Timeline", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Top line = audio envelope. Bars = moments when haptic vibration is generated.",
+                text = "Top lane = audio envelope. Bottom lane = generated haptic events.",
                 style = MaterialTheme.typography.bodySmall,
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TimelineLegendItem(color = Color(0xFF6B4BB5), label = "Audio")
+                TimelineLegendItem(color = Color(0xFFFF7043), label = "Bass")
+                TimelineLegendItem(color = Color(0xFF42A5F5), label = "Drum")
+                TimelineLegendItem(color = Color(0xFF26A69A), label = "Sustain")
+            }
             Spacer(modifier = Modifier.height(10.dp))
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp),
+                    .height(220.dp),
             ) {
                 val width = size.width
                 val height = size.height
@@ -349,19 +332,28 @@ private fun DebugTimelineCard(
                 if (samples.isEmpty()) return@Canvas
 
                 val stepX = if (samples.size > 1) width / (samples.size - 1) else width
-                val midY = height * 0.68f
-                val graphHeight = height * 0.58f
+                val audioMidY = height * 0.32f
+                val audioHeight = height * 0.22f
+                val eventMidY = height * 0.78f
+                val eventHeight = height * 0.18f
 
                 // baseline and grid
                 drawLine(
                     color = Color(0xFFD9D2E8),
-                    start = Offset(0f, midY),
-                    end = Offset(width, midY),
+                    start = Offset(0f, audioMidY),
+                    end = Offset(width, audioMidY),
+                    strokeWidth = 2f,
+                    cap = StrokeCap.Round,
+                )
+                drawLine(
+                    color = Color(0xFFD9D2E8),
+                    start = Offset(0f, eventMidY),
+                    end = Offset(width, eventMidY),
                     strokeWidth = 2f,
                     cap = StrokeCap.Round,
                 )
                 for (i in 0..4) {
-                    val y = height * (0.12f + i * 0.12f)
+                    val y = height * (0.08f + i * 0.12f)
                     drawLine(
                         color = Color(0xFFEAE4F4),
                         start = Offset(0f, y),
@@ -373,7 +365,7 @@ private fun DebugTimelineCard(
                 val points = samples.mapIndexed { index, frame ->
                     val x = index * stepX
                     val normalized = (frame.level.coerceIn(0, 100) / 100f)
-                    val y = midY - (normalized * graphHeight)
+                    val y = audioMidY - (normalized * audioHeight)
                     Offset(x, y)
                 }
 
@@ -394,8 +386,10 @@ private fun DebugTimelineCard(
                 samples.forEachIndexed { index, frame ->
                     val pulse = frame.pulse ?: return@forEachIndexed
                     val x = index * stepX
-                    val barTop = height * 0.10f
-                    val barBottom = height * 0.95f
+                    val laneTop = height * 0.58f
+                    val laneBottom = height * 0.96f
+                    val barTop = if (pulse.isSustained) laneTop + eventHeight * 0.10f else laneTop + eventHeight * 0.28f
+                    val barBottom = laneBottom
                     val barColor = when {
                         pulse.isSustained -> Color(0xFF26A69A)
                         pulse.isBass && pulse.isDrum -> Color(0xFFEF6C00)
@@ -403,6 +397,12 @@ private fun DebugTimelineCard(
                         pulse.isDrum -> Color(0xFF42A5F5)
                         else -> Color(0xFF7E57C2)
                     }
+                    drawLine(
+                        color = Color(0xFFE7DFF3),
+                        start = Offset(x, laneTop),
+                        end = Offset(x, laneBottom),
+                        strokeWidth = 1f,
+                    )
                     drawLine(
                         color = barColor,
                         start = Offset(x, barBottom),
@@ -414,7 +414,24 @@ private fun DebugTimelineCard(
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Text("Purple line = audio level history. Orange bars = bass hits. Blue bars = drum sparks. Teal bars = sustained rumble.", style = MaterialTheme.typography.bodySmall)
+            Text("Purple line = audio level history. Lower lane markers show which haptic type fired at that moment.", style = MaterialTheme.typography.bodySmall)
         }
+    }
+}
+
+@Composable
+private fun TimelineLegendItem(
+    color: Color,
+    label: String,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Canvas(
+            modifier = Modifier
+                .width(10.dp)
+                .height(10.dp),
+        ) {
+            drawCircle(color = color, radius = size.minDimension / 2f)
+        }
+        Text(label, style = MaterialTheme.typography.bodySmall)
     }
 }

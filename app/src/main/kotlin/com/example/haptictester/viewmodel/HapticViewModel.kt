@@ -36,7 +36,9 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     private val gate = ThrottleGate(100L)
     private var liveUpdateJob: Job? = null
     private var analysisJob: Job? = null
+    private var sensitivityReanalyzeJob: Job? = null
     private var loadedAudioUri: Uri? = null
+    private var analysisToken: Long = 0L
 
     private val _amplitude = MutableStateFlow(128)
     val amplitude = _amplitude.asStateFlow()
@@ -122,7 +124,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     fun setAudioSensitivityLevel(value: Int) {
         _audioSensitivityLevel.value = value.coerceIn(1, 10)
         pushAudioTuning()
-        reanalyzeLoadedAudio()
+        scheduleReanalyzeLoadedAudio()
     }
 
     fun loadAudio(uri: Uri) {
@@ -163,21 +165,10 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         _audioError.value = null
         _audioPlaying.value = false
 
-        analysisJob?.cancel()
-        analysisJob = viewModelScope.launch {
-            try {
-                val events = audioHaptic.analyze(uri)
-                audioHaptic.setPrecomputedAnalysis(events)
-                _audioAnalysisReady.value = events.isNotEmpty()
-                if (events.isEmpty()) {
-                    _audioError.value = "Pre-scan did not find a strong bass/drum pattern; live fallback remains available."
-                }
-            } catch (throwable: Throwable) {
-                _audioError.value = throwable.message ?: throwable.toString()
-            } finally {
-                _audioAnalyzing.value = false
-            }
-        }
+        startAnalysis(
+            uri = uri,
+            emptyMessage = "Pre-scan did not find a strong bass/drum pattern; live fallback remains available.",
+        )
     }
 
     fun playAudio() {
@@ -207,7 +198,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun appendPulseHistory(pulse: HapticPulseDebug) {
         val framePulse = AudioDebugPulse(
-            sampleIndex = 0,
+            sampleIndex = _audioDebugFrames.value.size,
             level = pulse.level,
             onMs = pulse.onMs,
             offMs = pulse.offMs,
@@ -216,13 +207,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
             isDrum = pulse.isDrumHit,
             isSustained = pulse.isSustained,
         )
-        val current = _audioDebugFrames.value
-        val next = if (current.isEmpty()) {
-            listOf(AudioDebugFrame(level = pulse.level, pulse = framePulse))
-        } else {
-            current.dropLast(1) + current.last().copy(pulse = framePulse)
-        }.takeLast(120)
-        _audioDebugFrames.value = next
+        _audioDebugFrames.value = (_audioDebugFrames.value + AudioDebugFrame(level = pulse.level, pulse = framePulse)).takeLast(120)
     }
 
     private fun requestLiveUpdate() {
@@ -258,16 +243,23 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun pushAudioTuning() {
         val level = _audioSensitivityLevel.value.coerceIn(1, 10)
-        val normalized = (level - 1) / 9.0
 
-        val noiseGate = (28.0 - normalized * 22.0)
-        val onsetThreshold = (40.0 - normalized * 30.0).toInt()
-        val sustainedThreshold = (84.0 - normalized * 62.0).toInt()
-        val smoothingAlpha = 0.08 + normalized * 0.26
-        val peakDecay = 0.994 - normalized * 0.024
-        val beatHoldoffMs = (220.0 - normalized * 150.0).toLong()
-        val bassThreshold = 300.0 - normalized * 190.0
-        val drumThreshold = 180.0 - normalized * 130.0
+        val profile = when (level) {
+            in 1..2 -> 0.0
+            in 3..4 -> 0.25
+            in 5..6 -> 0.5
+            in 7..8 -> 0.75
+            else -> 1.0
+        }
+
+        val noiseGate = (42.0 - profile * 36.0)
+        val onsetThreshold = (60.0 - profile * 44.0).toInt()
+        val sustainedThreshold = (118.0 - profile * 92.0).toInt()
+        val smoothingAlpha = 0.06 + profile * 0.34
+        val peakDecay = 0.996 - profile * 0.035
+        val beatHoldoffMs = (320.0 - profile * 240.0).toLong()
+        val bassThreshold = 520.0 - profile * 450.0
+        val drumThreshold = 320.0 - profile * 270.0
 
         audioHaptic.updateTuning(
             noiseGate = noiseGate,
@@ -285,19 +277,57 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun reanalyzeLoadedAudio() {
         val uri = loadedAudioUri ?: return
-        if (_audioAnalyzing.value) return
+        // Sensitivity changes should restart playback from the beginning
+        // after analysis, not continue from the previous position.
+        audioHaptic.stop()
+        _audioPlaying.value = false
+        _audioLevel.value = 0
+        haptic.cancel()
 
+        startAnalysis(
+            uri = uri,
+            emptyMessage = "Sensitivity update did not find a stronger bass/drum pattern; live fallback remains available.",
+        )
+    }
+
+    private fun scheduleReanalyzeLoadedAudio() {
+        val uri = loadedAudioUri ?: return
+
+        sensitivityReanalyzeJob?.cancel()
+        sensitivityReanalyzeJob = viewModelScope.launch {
+            delay(250)
+            if (loadedAudioUri != uri) return@launch
+            reanalyzeLoadedAudio()
+        }
+    }
+
+    private fun startAnalysis(
+        uri: Uri,
+        emptyMessage: String,
+    ) {
+        val token = ++analysisToken
         analysisJob?.cancel()
+        _audioAnalyzing.value = true
+        _audioAnalysisReady.value = false
+        _audioError.value = null
+
         analysisJob = viewModelScope.launch {
             try {
                 val events = audioHaptic.analyze(uri)
+                if (token != analysisToken || loadedAudioUri != uri) return@launch
                 audioHaptic.setPrecomputedAnalysis(events)
                 _audioAnalysisReady.value = events.isNotEmpty()
                 if (events.isEmpty()) {
-                    _audioError.value = "Sensitivity update did not find a stronger bass/drum pattern; live fallback remains available."
+                    _audioError.value = emptyMessage
                 }
             } catch (throwable: Throwable) {
-                _audioError.value = throwable.message ?: throwable.toString()
+                if (token == analysisToken) {
+                    _audioError.value = throwable.message ?: throwable.toString()
+                }
+            } finally {
+                if (token == analysisToken) {
+                    _audioAnalyzing.value = false
+                }
             }
         }
     }
