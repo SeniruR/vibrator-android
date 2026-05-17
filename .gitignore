@@ -1,12 +1,22 @@
+# Gradle and Android Studio
 .gradle/
+.gradle-wrapper/
 .idea/
 *.iml
+local.properties
+
+# Build outputs
 build/
 **/build/
-.DS_Store
-local.properties
+**/build/generated/
+**/build/intermediates/
+**/build/kotlin/
+**/build/outputs/
+**/build/tmp/
+
+# Native and temp artifacts
 .externalNativeBuild/
 .cxx/
 captures/
 *.log
-.gradle-wrapper/
+.DS_Store

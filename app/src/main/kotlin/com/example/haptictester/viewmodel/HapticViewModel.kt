@@ -21,6 +21,7 @@ data class AudioDebugPulse(
     val offMs: Long,
     val amplitude: Int,
     val isBass: Boolean,
+    val isDrum: Boolean,
     val isSustained: Boolean,
 )
 
@@ -34,6 +35,8 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     private val audioHaptic = AudioHapticController(application.applicationContext, haptic)
     private val gate = ThrottleGate(100L)
     private var liveUpdateJob: Job? = null
+    private var analysisJob: Job? = null
+    private var loadedAudioUri: Uri? = null
 
     private val _amplitude = MutableStateFlow(128)
     val amplitude = _amplitude.asStateFlow()
@@ -68,26 +71,17 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     private val _audioError = MutableStateFlow<String?>(null)
     val audioError = _audioError.asStateFlow()
 
+    private val _audioAnalyzing = MutableStateFlow(false)
+    val audioAnalyzing = _audioAnalyzing.asStateFlow()
+
+    private val _audioAnalysisReady = MutableStateFlow(false)
+    val audioAnalysisReady = _audioAnalysisReady.asStateFlow()
+
+    private val _audioSensitivityLevel = MutableStateFlow(7)
+    val audioSensitivityLevel = _audioSensitivityLevel.asStateFlow()
+
     private val _audioDebugFrames = MutableStateFlow<List<AudioDebugFrame>>(emptyList())
     val audioDebugFrames = _audioDebugFrames.asStateFlow()
-
-    private val _audioNoiseGate = MutableStateFlow(12)
-    val audioNoiseGate = _audioNoiseGate.asStateFlow()
-
-    private val _audioOnsetThreshold = MutableStateFlow(20)
-    val audioOnsetThreshold = _audioOnsetThreshold.asStateFlow()
-
-    private val _audioSustainedThreshold = MutableStateFlow(50)
-    val audioSustainedThreshold = _audioSustainedThreshold.asStateFlow()
-
-    private val _audioSmoothing = MutableStateFlow(20)
-    val audioSmoothing = _audioSmoothing.asStateFlow()
-
-    private val _audioPeakDecay = MutableStateFlow(98)
-    val audioPeakDecay = _audioPeakDecay.asStateFlow()
-
-    private val _audioBeatHoldoff = MutableStateFlow(110)
-    val audioBeatHoldoff = _audioBeatHoldoff.asStateFlow()
 
     fun setAmplitude(v: Int) {
         _amplitude.value = v.coerceIn(0, 255)
@@ -125,40 +119,19 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         audioHaptic.setVibrateFromAudio(enabled)
     }
 
-    fun setAudioNoiseGate(value: Int) {
-        _audioNoiseGate.value = value.coerceIn(0, 40)
+    fun setAudioSensitivityLevel(value: Int) {
+        _audioSensitivityLevel.value = value.coerceIn(1, 10)
         pushAudioTuning()
-    }
-
-    fun setAudioOnsetThreshold(value: Int) {
-        _audioOnsetThreshold.value = value.coerceIn(1, 50)
-        pushAudioTuning()
-    }
-
-    fun setAudioSustainedThreshold(value: Int) {
-        _audioSustainedThreshold.value = value.coerceIn(1, 100)
-        pushAudioTuning()
-    }
-
-    fun setAudioSmoothing(value: Int) {
-        _audioSmoothing.value = value.coerceIn(5, 80)
-        pushAudioTuning()
-    }
-
-    fun setAudioPeakDecay(value: Int) {
-        _audioPeakDecay.value = value.coerceIn(80, 99)
-        pushAudioTuning()
-    }
-
-    fun setAudioBeatHoldoff(value: Int) {
-        _audioBeatHoldoff.value = value.coerceIn(60, 250)
-        pushAudioTuning()
+        reanalyzeLoadedAudio()
     }
 
     fun loadAudio(uri: Uri) {
         val app = getApplication<Application>()
+        loadedAudioUri = uri
         _audioDebugFrames.value = emptyList()
         _audioLevel.value = 0
+        _audioAnalyzing.value = true
+        _audioAnalysisReady.value = false
         try {
             app.contentResolver.takePersistableUriPermission(
                 uri,
@@ -189,9 +162,26 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         _selectedAudioName.value = displayName
         _audioError.value = null
         _audioPlaying.value = false
+
+        analysisJob?.cancel()
+        analysisJob = viewModelScope.launch {
+            try {
+                val events = audioHaptic.analyze(uri)
+                audioHaptic.setPrecomputedAnalysis(events)
+                _audioAnalysisReady.value = events.isNotEmpty()
+                if (events.isEmpty()) {
+                    _audioError.value = "Pre-scan did not find a strong bass/drum pattern; live fallback remains available."
+                }
+            } catch (throwable: Throwable) {
+                _audioError.value = throwable.message ?: throwable.toString()
+            } finally {
+                _audioAnalyzing.value = false
+            }
+        }
     }
 
     fun playAudio() {
+        if (_audioAnalyzing.value) return
         stopTest()
         audioHaptic.play()
         _audioPlaying.value = true
@@ -223,6 +213,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
             offMs = pulse.offMs,
             amplitude = pulse.amplitude,
             isBass = pulse.isBassOnset,
+            isDrum = pulse.isDrumHit,
             isSustained = pulse.isSustained,
         )
         val current = _audioDebugFrames.value
@@ -266,14 +257,49 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun pushAudioTuning() {
+        val level = _audioSensitivityLevel.value.coerceIn(1, 10)
+        val normalized = (level - 1) / 9.0
+
+        val noiseGate = (28.0 - normalized * 22.0)
+        val onsetThreshold = (40.0 - normalized * 30.0).toInt()
+        val sustainedThreshold = (84.0 - normalized * 62.0).toInt()
+        val smoothingAlpha = 0.08 + normalized * 0.26
+        val peakDecay = 0.994 - normalized * 0.024
+        val beatHoldoffMs = (220.0 - normalized * 150.0).toLong()
+        val bassThreshold = 300.0 - normalized * 190.0
+        val drumThreshold = 180.0 - normalized * 130.0
+
         audioHaptic.updateTuning(
-            noiseGate = _audioNoiseGate.value.toDouble(),
-            onsetThreshold = _audioOnsetThreshold.value,
-            sustainedThreshold = _audioSustainedThreshold.value,
-            smoothingAlpha = _audioSmoothing.value / 100.0,
-            peakDecay = _audioPeakDecay.value / 100.0,
-            beatHoldoffMs = _audioBeatHoldoff.value.toLong(),
+            noiseGate = noiseGate,
+            onsetThreshold = onsetThreshold,
+            sustainedThreshold = sustainedThreshold,
+            smoothingAlpha = smoothingAlpha,
+            peakDecay = peakDecay,
+            beatHoldoffMs = beatHoldoffMs,
+            useBassOnly = false,
+            useDrumOnly = false,
+            bassThreshold = bassThreshold,
+            drumThreshold = drumThreshold,
         )
+    }
+
+    private fun reanalyzeLoadedAudio() {
+        val uri = loadedAudioUri ?: return
+        if (_audioAnalyzing.value) return
+
+        analysisJob?.cancel()
+        analysisJob = viewModelScope.launch {
+            try {
+                val events = audioHaptic.analyze(uri)
+                audioHaptic.setPrecomputedAnalysis(events)
+                _audioAnalysisReady.value = events.isNotEmpty()
+                if (events.isEmpty()) {
+                    _audioError.value = "Sensitivity update did not find a stronger bass/drum pattern; live fallback remains available."
+                }
+            } catch (throwable: Throwable) {
+                _audioError.value = throwable.message ?: throwable.toString()
+            }
+        }
     }
 
     override fun onCleared() {

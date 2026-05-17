@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.rememberScrollState
@@ -53,12 +54,9 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val audioVibrateEnabled by viewModel.audioVibrateEnabled.collectAsState()
     val audioLevel by viewModel.audioLevel.collectAsState()
     val audioError by viewModel.audioError.collectAsState()
-    val audioNoiseGate by viewModel.audioNoiseGate.collectAsState()
-    val audioOnsetThreshold by viewModel.audioOnsetThreshold.collectAsState()
-    val audioSustainedThreshold by viewModel.audioSustainedThreshold.collectAsState()
-    val audioSmoothing by viewModel.audioSmoothing.collectAsState()
-    val audioPeakDecay by viewModel.audioPeakDecay.collectAsState()
-    val audioBeatHoldoff by viewModel.audioBeatHoldoff.collectAsState()
+    val audioSensitivityLevel by viewModel.audioSensitivityLevel.collectAsState()
+    val audioAnalyzing by viewModel.audioAnalyzing.collectAsState()
+    val audioAnalysisReady by viewModel.audioAnalysisReady.collectAsState()
     val audioDebugFrames by viewModel.audioDebugFrames.collectAsState()
 
     val recordAudioGranted =
@@ -86,7 +84,7 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
             Text("Haptic Diagnostic Tester", style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Use the sliders while the motor is running, or load an audio file to drive vibrations from the sound envelope.",
+                text = "Load an audio file and let the app pre-scan bass hits and drum transients before it starts vibrating.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -98,6 +96,8 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                 recordAudioGranted = recordAudioGranted,
                 audioLevel = audioLevel,
                 audioError = audioError,
+                audioAnalyzing = audioAnalyzing,
+                audioAnalysisReady = audioAnalysisReady,
                 onSelectAudio = { openAudioLauncher.launch(arrayOf("audio/*")) },
                 onGrantPermission = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
                 onPlayAudio = {
@@ -128,47 +128,16 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
 
             ControlBlock(
                 title = "Audio Sensitivity",
-                valueText = "Noise gate: $audioNoiseGate | Onset: $audioOnsetThreshold | Sustain: $audioSustainedThreshold",
-                helperText = "Adjust while audio is playing. Higher values reduce false triggers from fans/background noise.",
+                valueText = "Level $audioSensitivityLevel / 10",
+                helperText = "Lower levels need louder bass and clearer drum hits. Higher levels react faster and more easily.",
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     androidx.compose.material3.Slider(
-                        value = audioNoiseGate.toFloat(),
-                        onValueChange = { viewModel.setAudioNoiseGate(it.toInt()) },
-                        valueRange = 0f..40f,
+                        value = audioSensitivityLevel.toFloat(),
+                        onValueChange = { viewModel.setAudioSensitivityLevel(it.toInt()) },
+                        valueRange = 1f..10f,
+                        steps = 8,
                     )
-                    Text("Noise gate")
-                    androidx.compose.material3.Slider(
-                        value = audioOnsetThreshold.toFloat(),
-                        onValueChange = { viewModel.setAudioOnsetThreshold(it.toInt()) },
-                        valueRange = 1f..50f,
-                    )
-                    Text("Bass onset threshold")
-                    androidx.compose.material3.Slider(
-                        value = audioSustainedThreshold.toFloat(),
-                        onValueChange = { viewModel.setAudioSustainedThreshold(it.toInt()) },
-                        valueRange = 1f..100f,
-                    )
-                    Text("Sustained tone threshold")
-                    androidx.compose.material3.Slider(
-                        value = audioSmoothing.toFloat(),
-                        onValueChange = { viewModel.setAudioSmoothing(it.toInt()) },
-                        valueRange = 5f..80f,
-                    )
-                    Text("Smoothing")
-                    androidx.compose.material3.Slider(
-                        value = audioPeakDecay.toFloat(),
-                        onValueChange = { viewModel.setAudioPeakDecay(it.toInt()) },
-                        valueRange = 80f..99f,
-                    )
-                    Text("Peak decay")
-
-                    androidx.compose.material3.Slider(
-                        value = audioBeatHoldoff.toFloat(),
-                        onValueChange = { viewModel.setAudioBeatHoldoff(it.toInt()) },
-                        valueRange = 60f..250f,
-                    )
-                    Text("Beat holdoff")
                 }
             }
 
@@ -266,6 +235,8 @@ private fun AudioBlock(
     recordAudioGranted: Boolean,
     audioLevel: Int,
     audioError: String?,
+    audioAnalyzing: Boolean,
+    audioAnalysisReady: Boolean,
     onSelectAudio: () -> Unit,
     onGrantPermission: () -> Unit,
     onPlayAudio: () -> Unit,
@@ -278,12 +249,13 @@ private fun AudioBlock(
             Text("Audio Playback Mode", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Pick an audio file and let the phone vibrate from the audio envelope. This uses the sound's waveform level, not perfect studio-grade analysis.",
+                text = "Pick an audio file and let the phone build a beat timeline from bass and drum peaks before playback.",
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text("Selected file: ${selectedAudioName ?: "none"}")
             Text("Audio level: $audioLevel%")
+            Text(if (audioAnalyzing) "Analyzing track..." else if (audioAnalysisReady) "Analysis ready" else "Analysis fallback only")
             Spacer(modifier = Modifier.height(8.dp))
             LinearProgressIndicator(
                 progress = audioLevel / 100f,
@@ -292,7 +264,7 @@ private fun AudioBlock(
             Spacer(modifier = Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = onSelectAudio) { Text("Open Audio") }
-                Button(onClick = onPlayAudio, enabled = selectedAudioName != null && !audioPlaying) { Text("Play") }
+                Button(onClick = onPlayAudio, enabled = selectedAudioName != null && !audioPlaying && !audioAnalyzing) { Text("Play") }
                 Button(onClick = onPauseAudio, enabled = audioPlaying) { Text("Pause") }
                 Button(onClick = onStopAudio, enabled = selectedAudioName != null) { Text("Stop") }
             }
@@ -311,7 +283,7 @@ private fun AudioBlock(
             if (!recordAudioGranted) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Microphone permission is needed for Visualizer-based audio tracking. Grant it to enable vibration from the music.",
+                    text = "Microphone permission is needed for Visualizer-based audio tracking. Grant it to let the app analyze bass and drum energy from the playing track.",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -424,7 +396,13 @@ private fun DebugTimelineCard(
                     val x = index * stepX
                     val barTop = height * 0.10f
                     val barBottom = height * 0.95f
-                    val barColor = if (pulse.isBass) Color(0xFFFF7043) else if (pulse.isSustained) Color(0xFF26A69A) else Color(0xFF7E57C2)
+                    val barColor = when {
+                        pulse.isSustained -> Color(0xFF26A69A)
+                        pulse.isBass && pulse.isDrum -> Color(0xFFEF6C00)
+                        pulse.isBass -> Color(0xFFFF7043)
+                        pulse.isDrum -> Color(0xFF42A5F5)
+                        else -> Color(0xFF7E57C2)
+                    }
                     drawLine(
                         color = barColor,
                         start = Offset(x, barBottom),
@@ -436,7 +414,7 @@ private fun DebugTimelineCard(
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Text("Purple line = audio level history. Orange bars = bass hits. Teal bars = sustained rumble.", style = MaterialTheme.typography.bodySmall)
+            Text("Purple line = audio level history. Orange bars = bass hits. Blue bars = drum sparks. Teal bars = sustained rumble.", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
