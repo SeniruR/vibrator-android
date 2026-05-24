@@ -2,9 +2,11 @@ package com.example.haptictester.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts.OpenDocument
 import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,16 +14,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.LinearProgressIndicator
@@ -29,15 +25,33 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import com.example.haptictester.viewmodel.HapticViewModel
+import androidx.media3.common.MediaItem
+import androidx.media3.common.C
+import androidx.media3.common.Player
+import androidx.media3.common.Tracks
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import com.example.haptictester.viewmodel.AudioDebugFrame
+import com.example.haptictester.viewmodel.HapticViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 @Composable
 fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
@@ -56,19 +70,76 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val audioAnalyzing by viewModel.audioAnalyzing.collectAsState()
     val audioAnalysisReady by viewModel.audioAnalysisReady.collectAsState()
     val audioDebugFrames by viewModel.audioDebugFrames.collectAsState()
+    val selectedVideoName by viewModel.selectedVideoName.collectAsState()
+    val selectedVideoMapName by viewModel.selectedVideoMapName.collectAsState()
+    val videoPlaying by viewModel.videoPlaying.collectAsState()
+    val videoError by viewModel.videoError.collectAsState()
+    val videoMapWindows by viewModel.videoMapWindows.collectAsState()
+    val videoMapWindowSizeMs by viewModel.videoMapWindowSizeMs.collectAsState()
 
     val recordAudioGranted =
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+    val videoPlayer = remember {
+        ExoPlayer.Builder(context).build().apply {
+            repeatMode = Player.REPEAT_MODE_OFF
+            volume = 1f
+        }
+    }
+    DisposableEffect(videoPlayer) {
+        onDispose {
+            videoPlayer.release()
+        }
+    }
+
+    var loadedVideoUri by remember { mutableStateOf<Uri?>(null) }
+    var videoPrepared by remember { mutableStateOf(false) }
+    var videoHasAudio by remember { mutableStateOf(false) }
 
     val openAudioLauncher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
         if (uri != null) {
             viewModel.loadAudio(uri)
         }
     }
+    val openVideoLauncher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
+        if (uri != null) {
+            loadedVideoUri = uri
+            videoPrepared = false
+            videoHasAudio = false
+            viewModel.loadVideo(uri)
+        }
+    }
+    val openMapLauncher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
+        if (uri != null) {
+            viewModel.loadVideoHapticMap(uri)
+        }
+    }
     val permissionLauncher = rememberLauncherForActivityResult(RequestPermission()) { granted ->
         if (!granted) {
             // UI below explains why vibration-from-audio remains unavailable.
         }
+    }
+
+    LaunchedEffect(videoPlaying, loadedVideoUri, selectedVideoMapName) {
+        if (!videoPlaying) {
+            return@LaunchedEffect
+        }
+
+        while (isActive && videoPlaying) {
+            viewModel.onVideoPlaybackPosition(videoPlayer.currentPosition.toInt())
+            delay(20)
+        }
+    }
+
+    LaunchedEffect(loadedVideoUri) {
+        val uri = loadedVideoUri ?: return@LaunchedEffect
+        videoPlayer.stop()
+        videoPlayer.clearMediaItems()
+        videoPlayer.setMediaItem(MediaItem.fromUri(uri))
+        videoPlayer.prepare()
+        videoPrepared = true
+        videoHasAudio = true
+        videoPlayer.playWhenReady = false
     }
 
     Surface(modifier = Modifier.fillMaxSize()) {
@@ -82,10 +153,65 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
             Text("Haptic Diagnostic Tester", style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Load an audio file and let the app pre-scan bass hits and drum transients before it starts vibrating.",
+                text = "Load a video plus a generated haptic JSON map for synced vibration, or use the existing audio mode below.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(modifier = Modifier.height(16.dp))
+
+            VideoBlock(
+                selectedVideoName = selectedVideoName,
+                selectedVideoMapName = selectedVideoMapName,
+                videoPlaying = videoPlaying,
+                videoPrepared = videoPrepared,
+                videoHasAudio = videoHasAudio,
+                videoMapWindows = videoMapWindows,
+                videoMapWindowSizeMs = videoMapWindowSizeMs,
+                videoError = videoError,
+                onSelectVideo = { openVideoLauncher.launch(arrayOf("video/*")) },
+                onSelectMap = { openMapLauncher.launch(arrayOf("application/json", "text/*")) },
+                onPlayVideo = {
+                    viewModel.playVideo()
+                    videoPlayer.playWhenReady = true
+                    videoPlayer.play()
+                },
+                onPauseVideo = {
+                    videoPlayer.pause()
+                    viewModel.pauseVideo()
+                },
+                onStopVideo = {
+                    videoPlayer.pause()
+                    videoPlayer.seekTo(0)
+                    viewModel.stopVideo()
+                },
+                onVideoPlayerReady = { playerView ->
+                    playerView.player = videoPlayer
+                    playerView.useController = true
+                    playerView.setShowNextButton(false)
+                    playerView.setShowPreviousButton(false)
+                    playerView.setShowFastForwardButton(false)
+                    playerView.setShowRewindButton(false)
+                    videoPlayer.addListener(object : Player.Listener {
+                        override fun onTracksChanged(tracks: Tracks) {
+                            videoHasAudio = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO }
+                        }
+
+                        override fun onIsPlayingChanged(isPlaying: Boolean) {
+                            if (!isPlaying && videoPlaying) {
+                                viewModel.stopVideo()
+                            }
+                        }
+
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            if (playbackState == Player.STATE_ENDED) {
+                                videoPlayer.seekTo(0)
+                                viewModel.stopVideo()
+                            }
+                        }
+                    })
+                },
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
 
             AudioBlock(
                 selectedAudioName = selectedAudioName,
@@ -187,7 +313,7 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                 Button(
                     modifier = Modifier.weight(1f),
                     onClick = { viewModel.startTest() },
-                    enabled = hasVibrator && !isTesting && !audioPlaying,
+                    enabled = hasVibrator && !isTesting && !audioPlaying && !videoPlaying,
                 ) {
                     Text("Start Test")
                 }
@@ -210,8 +336,98 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                     Text("hasAmplitudeControl: $hasAmplitude")
                     Text("isVibrating: $isTesting")
                     Text("audioPlaying: $audioPlaying")
+                    Text("videoPlaying: $videoPlaying")
                     Text("selectedAudio: ${selectedAudioName ?: "none"}")
+                    Text("selectedVideo: ${selectedVideoName ?: "none"}")
+                    Text("videoMap: ${selectedVideoMapName ?: "none"}")
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideoBlock(
+    selectedVideoName: String?,
+    selectedVideoMapName: String?,
+    videoPlaying: Boolean,
+    videoPrepared: Boolean,
+    videoHasAudio: Boolean,
+    videoMapWindows: Int,
+    videoMapWindowSizeMs: Long,
+    videoError: String?,
+    onSelectVideo: () -> Unit,
+    onSelectMap: () -> Unit,
+    onPlayVideo: () -> Unit,
+    onPauseVideo: () -> Unit,
+    onStopVideo: () -> Unit,
+    onVideoPlayerReady: (PlayerView) -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text("Video Playback Mode", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Choose an mp4 and a generated haptic JSON map. The video preview runs in the app and the JSON windows trigger vibrations as playback advances.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            AndroidView(
+                factory = { context ->
+                    PlayerView(context).also { onVideoPlayerReady(it) }
+                },
+                update = { view ->
+                    view.useController = true
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp),
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Selected video: ${selectedVideoName ?: "none"}")
+            Text("Selected map: ${selectedVideoMapName ?: "none"}")
+            Text("Map windows: $videoMapWindows")
+            Text("Map window size: ${if (videoMapWindowSizeMs > 0) "$videoMapWindowSizeMs ms" else "unknown"}")
+            Text(if (videoPrepared) "Video ready" else "Video not loaded yet")
+            Text(if (videoHasAudio) "Audio track detected" else "No audio track detected yet")
+            Text(if (videoPlaying) "Video playing" else "Video stopped")
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(onClick = onSelectVideo) { Text("Open Video") }
+                Button(onClick = onSelectMap) { Text("Open JSON") }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(
+                    onClick = onPlayVideo,
+                    enabled = selectedVideoName != null && selectedVideoMapName != null && videoPrepared,
+                ) {
+                    Text("Play")
+                }
+                Button(
+                    onClick = onPauseVideo,
+                    enabled = videoPlaying,
+                ) {
+                    Text("Pause")
+                }
+                Button(
+                    onClick = onStopVideo,
+                    enabled = selectedVideoName != null,
+                ) {
+                    Text("Stop")
+                }
+            }
+
+            if (videoError != null) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = videoError,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
         }
     }
@@ -337,7 +553,6 @@ private fun DebugTimelineCard(
                 val eventMidY = height * 0.78f
                 val eventHeight = height * 0.18f
 
-                // baseline and grid
                 drawLine(
                     color = Color(0xFFD9D2E8),
                     start = Offset(0f, audioMidY),

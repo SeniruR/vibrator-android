@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import com.example.haptictester.haptic.AudioHapticController
 import com.example.haptictester.haptic.AudioHapticController.HapticPulseDebug
 import com.example.haptictester.haptic.HapticController
+import com.example.haptictester.haptic.VideoHapticController
 import com.example.haptictester.haptic.ThrottleGate
 
 data class AudioDebugPulse(
@@ -33,11 +34,14 @@ data class AudioDebugFrame(
 class HapticViewModel(application: Application) : AndroidViewModel(application) {
     private val haptic = HapticController(application.applicationContext)
     private val audioHaptic = AudioHapticController(application.applicationContext, haptic)
+    private val videoHaptic = VideoHapticController(application.applicationContext, haptic)
     private val gate = ThrottleGate(100L)
     private var liveUpdateJob: Job? = null
     private var analysisJob: Job? = null
     private var sensitivityReanalyzeJob: Job? = null
     private var loadedAudioUri: Uri? = null
+    private var loadedVideoUri: Uri? = null
+    private var loadedVideoMapUri: Uri? = null
     private var analysisToken: Long = 0L
 
     private val _amplitude = MutableStateFlow(128)
@@ -84,6 +88,24 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _audioDebugFrames = MutableStateFlow<List<AudioDebugFrame>>(emptyList())
     val audioDebugFrames = _audioDebugFrames.asStateFlow()
+
+    private val _selectedVideoName = MutableStateFlow<String?>(null)
+    val selectedVideoName = _selectedVideoName.asStateFlow()
+
+    private val _selectedVideoMapName = MutableStateFlow<String?>(null)
+    val selectedVideoMapName = _selectedVideoMapName.asStateFlow()
+
+    private val _videoPlaying = MutableStateFlow(false)
+    val videoPlaying = _videoPlaying.asStateFlow()
+
+    private val _videoError = MutableStateFlow<String?>(null)
+    val videoError = _videoError.asStateFlow()
+
+    private val _videoMapWindows = MutableStateFlow(0)
+    val videoMapWindows = _videoMapWindows.asStateFlow()
+
+    private val _videoMapWindowSizeMs = MutableStateFlow(0L)
+    val videoMapWindowSizeMs = _videoMapWindowSizeMs.asStateFlow()
 
     fun setAmplitude(v: Int) {
         _amplitude.value = v.coerceIn(0, 255)
@@ -189,6 +211,74 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         _audioPlaying.value = false
         _audioLevel.value = 0
         haptic.cancel()
+    }
+
+    fun loadVideo(uri: Uri) {
+        val app = getApplication<Application>()
+        loadedVideoUri = uri
+        _selectedVideoName.value = resolveDisplayName(app, uri)
+        _videoError.value = null
+        try {
+            app.contentResolver.takePersistableUriPermission(
+                uri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        } catch (_: SecurityException) {
+            // temporary permission is enough for this session
+        }
+    }
+
+    fun loadVideoHapticMap(uri: Uri) {
+        val app = getApplication<Application>()
+        loadedVideoMapUri = uri
+        _videoError.value = null
+        try {
+            app.contentResolver.takePersistableUriPermission(
+                uri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        } catch (_: SecurityException) {
+            // temporary permission is enough for this session
+        }
+
+        try {
+            val label = videoHaptic.loadMap(uri)
+            _selectedVideoMapName.value = label
+            _videoMapWindows.value = videoHaptic.getWindowCount()
+            _videoMapWindowSizeMs.value = videoHaptic.getWindowSizeMs()
+        } catch (throwable: Throwable) {
+            _selectedVideoMapName.value = null
+            _videoMapWindows.value = 0
+            _videoMapWindowSizeMs.value = 0L
+            _videoError.value = throwable.message ?: throwable.toString()
+        }
+    }
+
+    fun playVideo() {
+        if (loadedVideoUri == null || loadedVideoMapUri == null) {
+            _videoError.value = "Load both a video file and a haptic JSON map before playing."
+            return
+        }
+
+        stopTest()
+        stopAudio()
+        _videoPlaying.value = true
+        _videoError.value = null
+    }
+
+    fun pauseVideo() {
+        _videoPlaying.value = false
+        videoHaptic.stop()
+    }
+
+    fun stopVideo() {
+        _videoPlaying.value = false
+        videoHaptic.stop()
+    }
+
+    fun onVideoPlaybackPosition(positionMs: Int) {
+        if (!_videoPlaying.value) return
+        videoHaptic.updatePlaybackPosition(positionMs.toLong(), _amplitude.value)
     }
 
     private fun appendAudioHistory(level: Int) {
@@ -334,7 +424,29 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
 
     override fun onCleared() {
         audioHaptic.release()
+        videoHaptic.release()
         stopTest()
         super.onCleared()
+    }
+
+    private fun resolveDisplayName(app: Application, uri: Uri): String? {
+        return try {
+            app.contentResolver.query(
+                uri,
+                arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                null,
+                null,
+                null,
+            )?.use { cursor ->
+                val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (index >= 0 && cursor.moveToFirst()) {
+                    cursor.getString(index)
+                } else {
+                    null
+                }
+            }
+        } catch (_: Throwable) {
+            null
+        }
     }
 }

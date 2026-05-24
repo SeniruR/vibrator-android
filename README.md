@@ -2,12 +2,24 @@
 
 Minimal Jetpack Compose Android app to test vibrator amplitude and duty cycle on a device (Samsung A04 recommended).
 
+The app now has two playback modes:
+
+- Audio mode: load an audio file and let the app analyze it for haptic events.
+- Video mode: load a `video.mp4` plus a generated haptic JSON map such as `output_haptic_map.json`, then play the video while the map drives vibrations.
+
 Quick start:
 
 1. Open the `HapticDiagnosticTester` folder in Android Studio.
 2. Let Android Studio sync Gradle and install required plugins.
 3. Connect your Samsung A04 with USB debugging enabled.
 4. Run the `app` configuration.
+
+Video workflow:
+
+1. Open the app.
+2. In the Video Playback Mode card, choose a video file.
+3. Choose the matching haptic JSON file.
+4. Press Play, Pause, or Stop.
 
 in vscode, use below ps commands.
 1. .\build.ps1
