@@ -142,21 +142,33 @@ class VideoHapticController(
         val windowSizeMs = root.optLong("window_size_ms", 40L).coerceAtLeast(1L)
         val trackObject = root.optJSONObject("track") ?: JSONObject()
 
-        val track = buildMap<Long, Int> {
-            val keys = trackObject.keys()
-            while (keys.hasNext()) {
-                val key = keys.next()
-                val windowStartMs = key.toLongOrNull() ?: continue
-                val intensity = trackObject.optInt(key, 0).coerceIn(0, 255)
-                put(windowStartMs, intensity)
+        val track = mutableMapOf<Long, Int>()
+        val keys = trackObject.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val rawWindowStartMs = key.toLongOrNull() ?: continue
+            val normalizedWindowStartMs = ((rawWindowStartMs / windowSizeMs) * windowSizeMs)
+            val intensity = trackObject.optInt(key, 0).coerceIn(0, 255)
+            val previous = track[normalizedWindowStartMs] ?: 0
+            // Keep strongest amplitude when multiple raw points collapse into one playback bucket.
+            track[normalizedWindowStartMs] = maxOf(previous, intensity)
+        }
+
+        val normalizedTrack = buildMap<Long, Int> {
+            // Fill missing windows with zeros so playback has deterministic lookups.
+            val maxWindow = track.keys.maxOrNull() ?: 0L
+            var cursor = 0L
+            while (cursor <= maxWindow) {
+                put(cursor, track[cursor] ?: 0)
+                cursor += windowSizeMs
             }
         }
 
-        if (track.isEmpty()) {
+        if (normalizedTrack.isEmpty()) {
             throw IllegalArgumentException("Haptic map does not contain any windows")
         }
 
-        return HapticMap(windowSizeMs = windowSizeMs, track = track)
+        return HapticMap(windowSizeMs = windowSizeMs, track = normalizedTrack)
     }
 
     private fun resolveDisplayName(uri: Uri): String? {

@@ -25,3 +25,4 @@ gradle-8.1.1-bin.zip
 
 *.mp4
 output_haptic_map.json
+videoplayback_output_haptic_map.json

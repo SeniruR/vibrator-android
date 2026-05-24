@@ -1,0 +1,7 @@
+numpy
+pandas
+matplotlib
+opencv-python-headless
+librosa
+soundfile
+scipy
