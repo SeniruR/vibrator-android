@@ -14,5 +14,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".ui.VideoFullscreenActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+        />
     </application>
 </manifest>

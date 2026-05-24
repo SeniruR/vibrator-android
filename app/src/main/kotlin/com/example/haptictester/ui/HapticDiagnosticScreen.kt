@@ -4,8 +4,10 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import android.app.Activity
 import androidx.activity.result.contract.ActivityResultContracts.OpenDocument
 import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
+import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -48,6 +50,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import com.example.haptictester.ui.VideoFullscreenActivity
 import com.example.haptictester.viewmodel.AudioDebugFrame
 import com.example.haptictester.viewmodel.HapticViewModel
 import kotlinx.coroutines.delay
@@ -120,6 +123,17 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
         }
     }
 
+    val fullscreenLauncher = rememberLauncherForActivityResult(StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            val pos = data?.getLongExtra(VideoFullscreenActivity.EXTRA_POSITION, videoPlayer.currentPosition) ?: videoPlayer.currentPosition
+            val isPlaying = data?.getBooleanExtra(VideoFullscreenActivity.EXTRA_PLAYING, false) ?: false
+            videoPlayer.seekTo(pos)
+            videoPlayer.playWhenReady = isPlaying
+            if (isPlaying) videoPlayer.play()
+        }
+    }
+
     LaunchedEffect(videoPlaying, loadedVideoUri, selectedVideoMapName) {
         if (!videoPlaying) {
             return@LaunchedEffect
@@ -141,6 +155,9 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
         videoHasAudio = true
         videoPlayer.playWhenReady = false
     }
+
+    // Keep a stable reference to the last PlayerView so we can rely on ExoPlayer attaching/detaching
+    var currentPlayerView by remember { mutableStateOf<PlayerView?>(null) }
 
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -184,20 +201,24 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                     viewModel.stopVideo()
                 },
                 onVideoPlayerReady = { playerView ->
+                    currentPlayerView = playerView
                     playerView.player = videoPlayer
                     playerView.useController = true
                     playerView.setShowNextButton(false)
                     playerView.setShowPreviousButton(false)
                     playerView.setShowFastForwardButton(false)
                     playerView.setShowRewindButton(false)
+
                     videoPlayer.addListener(object : Player.Listener {
                         override fun onTracksChanged(tracks: Tracks) {
                             videoHasAudio = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO }
                         }
 
                         override fun onIsPlayingChanged(isPlaying: Boolean) {
-                            if (!isPlaying && videoPlaying) {
-                                viewModel.stopVideo()
+                            if (isPlaying && !videoPlaying) {
+                                viewModel.playVideo()
+                            } else if (!isPlaying && videoPlaying) {
+                                viewModel.pauseVideo()
                             }
                         }
 
@@ -208,6 +229,14 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                             }
                         }
                     })
+                },
+                onFullscreen = {
+                    val uri = loadedVideoUri
+                    if (uri != null) {
+                        PlayerHolder.player = videoPlayer
+                        val intent = VideoFullscreenActivity.createIntent(context, uri, videoPlayer.currentPosition, videoPlayer.isPlaying)
+                        fullscreenLauncher.launch(intent)
+                    }
                 },
             )
 
@@ -362,6 +391,7 @@ private fun VideoBlock(
     onPauseVideo: () -> Unit,
     onStopVideo: () -> Unit,
     onVideoPlayerReady: (PlayerView) -> Unit,
+    onFullscreen: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -375,7 +405,11 @@ private fun VideoBlock(
 
             AndroidView(
                 factory = { context ->
-                    PlayerView(context).also { onVideoPlayerReady(it) }
+                    PlayerView(context).also {
+                        it.setBackgroundColor(android.graphics.Color.BLACK)
+                        it.keepScreenOn = false
+                        onVideoPlayerReady(it)
+                    }
                 },
                 update = { view ->
                     view.useController = true
@@ -408,16 +442,22 @@ private fun VideoBlock(
                     Text("Play")
                 }
                 Button(
-                    onClick = onPauseVideo,
-                    enabled = videoPlaying,
+                    onClick = onFullscreen,
+                    enabled = selectedVideoName != null,
                 ) {
-                    Text("Pause")
+                    Text("Fullscreen")
                 }
                 Button(
                     onClick = onStopVideo,
                     enabled = selectedVideoName != null,
                 ) {
                     Text("Stop")
+                }
+                Button(
+                    onClick = onPauseVideo,
+                    enabled = videoPlaying,
+                ) {
+                    Text("Pause")
                 }
             }
 
