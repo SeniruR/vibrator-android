@@ -28,7 +28,7 @@ class VideoFullscreenActivity : ComponentActivity() {
         }
     }
 
-    private var player: ExoPlayer? = null
+    private var playerView: PlayerView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,48 +39,57 @@ class VideoFullscreenActivity : ComponentActivity() {
         val position = intent.getLongExtra(EXTRA_POSITION, 0L)
         val playing = intent.getBooleanExtra(EXTRA_PLAYING, false)
 
-        val playerView = PlayerView(this)
-        playerView.setBackgroundColor(Color.BLACK)
-        playerView.keepScreenOn = true
-        setContentView(playerView)
+        val view = PlayerView(this)
+        playerView = view
+        view.setBackgroundColor(Color.BLACK)
+        view.keepScreenOn = true
+        setContentView(view)
 
-        // Keep the screen on while fullscreen video plays
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        // Prefer using shared player if available so vibrations/state remain consistent
-        player = PlayerHolder.player ?: run {
-            val p = ExoPlayer.Builder(this).build()
-            if (uri != null) {
-                p.setMediaItem(MediaItem.fromUri(uri))
-                p.prepare()
-                p.seekTo(position)
-                p.playWhenReady = playing
+        val player = PlayerHolder.player ?: run {
+            ExoPlayer.Builder(this).build().apply {
+                if (uri != null) {
+                    setMediaItem(MediaItem.fromUri(uri))
+                    prepare()
+                    seekTo(position)
+                    playWhenReady = playing
+                }
             }
-            p
         }
 
         PlayerHolder.player = player
-        playerView.player = player
-        playerView.useController = true
+        view.player = player
+        view.useController = true
 
-        window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN
+        if (PlayerHolder.player === player && uri != null && player.mediaItemCount == 0) {
+            player.setMediaItem(MediaItem.fromUri(uri))
+            player.prepare()
+            player.seekTo(position)
+            player.playWhenReady = playing
+        }
+
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = (
+            View.SYSTEM_UI_FLAG_FULLSCREEN
                 or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
+                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            )
     }
 
     override fun onStop() {
-        super.onStop()
-        player?.let {
-            val pos = it.currentPosition
-            val isPlaying = it.isPlaying
-            // Detach player from this view but do not release shared player
-            setResult(RESULT_OK, Intent().apply {
-                putExtra(EXTRA_POSITION, pos)
-                putExtra(EXTRA_PLAYING, isPlaying)
-            })
-            // Do not release if this is the shared player; main screen manages lifecycle
-            player = null
+        val player = PlayerHolder.player
+        if (player != null) {
+            setResult(
+                RESULT_OK,
+                Intent().apply {
+                    putExtra(EXTRA_POSITION, player.currentPosition)
+                    putExtra(EXTRA_PLAYING, player.isPlaying)
+                },
+            )
         }
+        playerView?.player = null
+        super.onStop()
         finish()
     }
 }

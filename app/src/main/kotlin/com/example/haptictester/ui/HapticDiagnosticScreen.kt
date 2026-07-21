@@ -4,13 +4,14 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
-import android.app.Activity
 import androidx.activity.result.contract.ActivityResultContracts.OpenDocument
 import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
-import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,46 +20,71 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import androidx.media3.common.MediaItem
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
-import com.example.haptictester.ui.VideoFullscreenActivity
+import com.example.haptictester.haptic.CompareAlgorithm
+import com.example.haptictester.haptic.CompareSlotState
+import com.example.haptictester.haptic.HapticTrackFormat
 import com.example.haptictester.viewmodel.AudioDebugFrame
 import com.example.haptictester.viewmodel.HapticViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
+private enum class AppTab(val label: String) {
+    Video("Video + Haptic"),
+    Audio("Audio"),
+    Manual("Manual Test"),
+}
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val context = LocalContext.current
+    var selectedTab by remember { mutableIntStateOf(0) }
+
     val amplitude by viewModel.amplitude.collectAsState()
     val duty by viewModel.duty.collectAsState()
     val periodMs by viewModel.periodMs.collectAsState()
@@ -69,16 +95,21 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val audioPlaying by viewModel.audioPlaying.collectAsState()
     val audioLevel by viewModel.audioLevel.collectAsState()
     val audioError by viewModel.audioError.collectAsState()
-    val audioSensitivityLevel by viewModel.audioSensitivityLevel.collectAsState()
     val audioAnalyzing by viewModel.audioAnalyzing.collectAsState()
     val audioAnalysisReady by viewModel.audioAnalysisReady.collectAsState()
+    val audioSensitivityLevel by viewModel.audioSensitivityLevel.collectAsState()
     val audioDebugFrames by viewModel.audioDebugFrames.collectAsState()
     val selectedVideoName by viewModel.selectedVideoName.collectAsState()
-    val selectedVideoMapName by viewModel.selectedVideoMapName.collectAsState()
+    val selectedHapticTrackName by viewModel.selectedHapticTrackName.collectAsState()
+    val hapticTrackFormat by viewModel.hapticTrackFormat.collectAsState()
+    val hapticTrackLoading by viewModel.hapticTrackLoading.collectAsState()
     val videoPlaying by viewModel.videoPlaying.collectAsState()
     val videoError by viewModel.videoError.collectAsState()
     val videoMapWindows by viewModel.videoMapWindows.collectAsState()
     val videoMapWindowSizeMs by viewModel.videoMapWindowSizeMs.collectAsState()
+    val hapticTrackDurationMs by viewModel.hapticTrackDurationMs.collectAsState()
+    val compareSlots by viewModel.compareSlots.collectAsState()
+    val activeCompareAlgorithm by viewModel.activeCompareAlgorithm.collectAsState()
 
     val recordAudioGranted =
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -89,20 +120,20 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
             volume = 1f
         }
     }
+
     DisposableEffect(videoPlayer) {
-        onDispose {
-            videoPlayer.release()
-        }
+        onDispose { videoPlayer.release() }
     }
 
     var loadedVideoUri by remember { mutableStateOf<Uri?>(null) }
     var videoPrepared by remember { mutableStateOf(false) }
     var videoHasAudio by remember { mutableStateOf(false) }
+    var videoDurationMs by remember { mutableStateOf(0L) }
+    var isVideoFullscreen by remember { mutableStateOf(false) }
+    var pendingCompareAlgorithm by remember { mutableStateOf<CompareAlgorithm?>(null) }
 
     val openAudioLauncher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
-        if (uri != null) {
-            viewModel.loadAudio(uri)
-        }
+        if (uri != null) viewModel.loadAudio(uri)
     }
     val openVideoLauncher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
         if (uri != null) {
@@ -112,35 +143,65 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
             viewModel.loadVideo(uri)
         }
     }
-    val openMapLauncher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
-        if (uri != null) {
-            viewModel.loadVideoHapticMap(uri)
-        }
+    val openJsonLauncher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
+        if (uri != null) viewModel.loadVideoHapticMap(uri)
     }
-    val permissionLauncher = rememberLauncherForActivityResult(RequestPermission()) { granted ->
-        if (!granted) {
-            // UI below explains why vibration-from-audio remains unavailable.
+    val openWavLauncher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
+        if (uri != null) viewModel.loadVideoHapticWav(uri)
+    }
+    val openCompareLauncher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
+        val algorithm = pendingCompareAlgorithm
+        if (uri != null && algorithm != null) {
+            viewModel.loadCompareSlot(algorithm, uri)
         }
+        pendingCompareAlgorithm = null
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(RequestPermission()) { /* handled in UI */ }
+
+    val hasCompareReady = compareSlots.values.any { it.isReady }
+    val canPlayVideo = selectedVideoName != null &&
+        videoPrepared &&
+        !hapticTrackLoading &&
+        (selectedHapticTrackName != null || hasCompareReady)
+
+    DisposableEffect(videoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onTracksChanged(tracks: Tracks) {
+                videoHasAudio = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO }
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying && !videoPlaying) {
+                    viewModel.playVideo()
+                } else if (!isPlaying && videoPlaying) {
+                    viewModel.pauseVideo()
+                }
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                when (playbackState) {
+                    Player.STATE_READY -> {
+                        videoDurationMs = videoPlayer.duration.coerceAtLeast(0L)
+                        videoPrepared = true
+                    }
+                    Player.STATE_ENDED -> {
+                        videoPlayer.seekTo(0)
+                        viewModel.stopVideo()
+                    }
+                }
+            }
+        }
+        videoPlayer.addListener(listener)
+        onDispose { videoPlayer.removeListener(listener) }
     }
 
-    val fullscreenLauncher = rememberLauncherForActivityResult(StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val data = result.data
-            val pos = data?.getLongExtra(VideoFullscreenActivity.EXTRA_POSITION, videoPlayer.currentPosition) ?: videoPlayer.currentPosition
-            val isPlaying = data?.getBooleanExtra(VideoFullscreenActivity.EXTRA_PLAYING, false) ?: false
-            videoPlayer.seekTo(pos)
-            videoPlayer.playWhenReady = isPlaying
-            if (isPlaying) videoPlayer.play()
-        }
-    }
-
-    LaunchedEffect(videoPlaying, loadedVideoUri, selectedVideoMapName) {
-        if (!videoPlaying) {
-            return@LaunchedEffect
-        }
-
+    LaunchedEffect(videoPlaying, loadedVideoUri, selectedHapticTrackName, isVideoFullscreen) {
+        if (!videoPlaying || isVideoFullscreen) return@LaunchedEffect
         while (isActive && videoPlaying) {
-            viewModel.onVideoPlaybackPosition(videoPlayer.currentPosition.toInt())
+            viewModel.onVideoPlaybackPosition(
+                positionMs = videoPlayer.currentPosition.toInt(),
+                videoDurationMs = videoDurationMs,
+            )
             delay(20)
         }
     }
@@ -151,330 +212,382 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
         videoPlayer.clearMediaItems()
         videoPlayer.setMediaItem(MediaItem.fromUri(uri))
         videoPlayer.prepare()
-        videoPrepared = true
-        videoHasAudio = true
+        videoPrepared = false
+        videoDurationMs = 0L
         videoPlayer.playWhenReady = false
     }
 
-    // Keep a stable reference to the last PlayerView so we can rely on ExoPlayer attaching/detaching
-    var currentPlayerView by remember { mutableStateOf<PlayerView?>(null) }
+    val durationMismatch = videoDurationMs > 0L &&
+        hapticTrackDurationMs > 0L &&
+        kotlin.math.abs(videoDurationMs - hapticTrackDurationMs) > 2_000L
 
-    Surface(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize()) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text("Haptic Tester", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            text = if (hasVibrator) "Ready on device" else "No vibrator detected",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+            )
+        },
+    ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .padding(padding)
+                .padding(horizontal = 16.dp),
         ) {
-            Text("Haptic Diagnostic Tester", style = MaterialTheme.typography.titleLarge)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Load a video plus a generated haptic JSON map for synced vibration, or use the existing audio mode below.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            VideoBlock(
-                selectedVideoName = selectedVideoName,
-                selectedVideoMapName = selectedVideoMapName,
-                videoPlaying = videoPlaying,
-                videoPrepared = videoPrepared,
-                videoHasAudio = videoHasAudio,
-                videoMapWindows = videoMapWindows,
-                videoMapWindowSizeMs = videoMapWindowSizeMs,
-                videoError = videoError,
-                onSelectVideo = { openVideoLauncher.launch(arrayOf("video/*")) },
-                onSelectMap = { openMapLauncher.launch(arrayOf("application/json", "text/*")) },
-                onPlayVideo = {
-                    viewModel.playVideo()
-                    videoPlayer.playWhenReady = true
-                    videoPlayer.play()
-                },
-                onPauseVideo = {
-                    videoPlayer.pause()
-                    viewModel.pauseVideo()
-                },
-                onStopVideo = {
-                    videoPlayer.pause()
-                    videoPlayer.seekTo(0)
-                    viewModel.stopVideo()
-                },
-                onVideoPlayerReady = { playerView ->
-                    currentPlayerView = playerView
-                    playerView.player = videoPlayer
-                    playerView.useController = true
-                    playerView.setShowNextButton(false)
-                    playerView.setShowPreviousButton(false)
-                    playerView.setShowFastForwardButton(false)
-                    playerView.setShowRewindButton(false)
-
-                    videoPlayer.addListener(object : Player.Listener {
-                        override fun onTracksChanged(tracks: Tracks) {
-                            videoHasAudio = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO }
-                        }
-
-                        override fun onIsPlayingChanged(isPlaying: Boolean) {
-                            if (isPlaying && !videoPlaying) {
-                                viewModel.playVideo()
-                            } else if (!isPlaying && videoPlaying) {
-                                viewModel.pauseVideo()
-                            }
-                        }
-
-                        override fun onPlaybackStateChanged(playbackState: Int) {
-                            if (playbackState == Player.STATE_ENDED) {
-                                videoPlayer.seekTo(0)
-                                viewModel.stopVideo()
-                            }
-                        }
-                    })
-                },
-                onFullscreen = {
-                    val uri = loadedVideoUri
-                    if (uri != null) {
-                        PlayerHolder.player = videoPlayer
-                        val intent = VideoFullscreenActivity.createIntent(context, uri, videoPlayer.currentPosition, videoPlayer.isPlaying)
-                        fullscreenLauncher.launch(intent)
-                    }
-                },
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            AudioBlock(
-                selectedAudioName = selectedAudioName,
-                audioPlaying = audioPlaying,
-                recordAudioGranted = recordAudioGranted,
-                audioLevel = audioLevel,
-                audioError = audioError,
-                audioAnalyzing = audioAnalyzing,
-                audioAnalysisReady = audioAnalysisReady,
-                onSelectAudio = { openAudioLauncher.launch(arrayOf("audio/*")) },
-                onGrantPermission = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
-                onPlayAudio = {
-                    if (!recordAudioGranted) {
-                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                    } else {
-                        viewModel.playAudio()
-                    }
-                },
-                onPauseAudio = { viewModel.pauseAudio() },
-                onStopAudio = { viewModel.stopAudio() },
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            DebugTimelineCard(
-                frames = audioDebugFrames,
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            ControlBlock(
-                title = "Audio Sensitivity",
-                valueText = "Level $audioSensitivityLevel / 10",
-                helperText = "Lower levels need louder bass and clearer drum hits. Higher levels react faster and more easily.",
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    androidx.compose.material3.Slider(
-                        value = audioSensitivityLevel.toFloat(),
-                        onValueChange = { viewModel.setAudioSensitivityLevel(it.toInt()) },
-                        valueRange = 1f..10f,
-                        steps = 8,
+            TabRow(selectedTabIndex = selectedTab) {
+                AppTab.entries.forEachIndexed { index, tab ->
+                    Tab(
+                        selected = selectedTab == index,
+                        onClick = { selectedTab = index },
+                        text = { Text(tab.label, maxLines = 1) },
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            ControlBlock(
-                title = "Intensity (Amplitude)",
-                valueText = "$amplitude / 255",
-                helperText = if (hasAmplitude) {
-                    "Hardware amplitude control is available. This slider should change actual motor strength."
-                } else {
-                    "This phone does not support real amplitude control. Use this as a software intensity target only."
-                },
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                androidx.compose.material3.Slider(
-                    value = amplitude.toFloat(),
-                    onValueChange = { viewModel.setAmplitude(it.toInt()) },
-                    valueRange = 0f..255f,
-                    enabled = hasAmplitude,
+                IntensityCapCard(
+                    amplitude = amplitude,
+                    hasAmplitude = hasAmplitude,
+                    onAmplitudeChange = viewModel::setAmplitude,
+                )
+
+                when (AppTab.entries[selectedTab]) {
+                    AppTab.Video -> VideoTab(
+                        selectedVideoName = selectedVideoName,
+                        selectedHapticTrackName = selectedHapticTrackName,
+                        hapticTrackFormat = hapticTrackFormat,
+                        hapticTrackLoading = hapticTrackLoading,
+                        compareSlots = compareSlots,
+                        activeCompareAlgorithm = activeCompareAlgorithm,
+                        canPlayVideo = canPlayVideo,
+                        videoPlaying = videoPlaying,
+                        videoPrepared = videoPrepared,
+                        videoHasAudio = videoHasAudio,
+                        videoMapWindows = videoMapWindows,
+                        videoMapWindowSizeMs = videoMapWindowSizeMs,
+                        hapticTrackDurationMs = hapticTrackDurationMs,
+                        videoDurationMs = videoDurationMs,
+                        durationMismatch = durationMismatch,
+                        videoError = videoError,
+                        onSelectVideo = { openVideoLauncher.launch(arrayOf("video/*")) },
+                        onSelectJson = { openJsonLauncher.launch(arrayOf("application/json", "text/*", "*/*")) },
+                        onSelectWav = { openWavLauncher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/*")) },
+                        onLoadCompareSlot = { algorithm ->
+                            pendingCompareAlgorithm = algorithm
+                            openCompareLauncher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/*"))
+                        },
+                        onSwitchCompareSlot = { algorithm ->
+                            viewModel.switchCompareSlot(algorithm, videoPlayer.currentPosition)
+                        },
+                        onPlayVideo = {
+                            viewModel.playVideo()
+                            videoPlayer.playWhenReady = true
+                            videoPlayer.play()
+                        },
+                        onPauseVideo = {
+                            videoPlayer.pause()
+                            viewModel.pauseVideo()
+                        },
+                        onStopVideo = {
+                            videoPlayer.pause()
+                            videoPlayer.seekTo(0)
+                            viewModel.stopVideo()
+                        },
+                        onFullscreen = {
+                            if (loadedVideoUri == null) return@VideoTab
+                            if (!videoPlaying) {
+                                viewModel.playVideo()
+                                videoPlayer.playWhenReady = true
+                                videoPlayer.play()
+                            }
+                            isVideoFullscreen = true
+                        },
+                        videoPlayer = videoPlayer,
+                    )
+
+                    AppTab.Audio -> AudioTab(
+                        selectedAudioName = selectedAudioName,
+                        audioPlaying = audioPlaying,
+                        recordAudioGranted = recordAudioGranted,
+                        audioLevel = audioLevel,
+                        audioError = audioError,
+                        audioAnalyzing = audioAnalyzing,
+                        audioAnalysisReady = audioAnalysisReady,
+                        audioSensitivityLevel = audioSensitivityLevel,
+                        audioDebugFrames = audioDebugFrames,
+                        onSelectAudio = { openAudioLauncher.launch(arrayOf("audio/*")) },
+                        onGrantPermission = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
+                        onPlayAudio = {
+                            if (!recordAudioGranted) {
+                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            } else {
+                                viewModel.playAudio()
+                            }
+                        },
+                        onPauseAudio = viewModel::pauseAudio,
+                        onStopAudio = viewModel::stopAudio,
+                        onSensitivityChange = viewModel::setAudioSensitivityLevel,
+                    )
+
+                    AppTab.Manual -> ManualTestTab(
+                        duty = duty,
+                        periodMs = periodMs,
+                        isTesting = isTesting,
+                        hasVibrator = hasVibrator,
+                        audioPlaying = audioPlaying,
+                        videoPlaying = videoPlaying,
+                        onDutyChange = viewModel::setDuty,
+                        onPeriodChange = viewModel::setPeriodMs,
+                        onStartTest = viewModel::startTest,
+                        onStopTest = viewModel::stopTest,
+                    )
+                }
+
+                HardwareStatusCard(
+                    hasVibrator = hasVibrator,
+                    hasAmplitude = hasAmplitude,
+                    isTesting = isTesting,
+                    audioPlaying = audioPlaying,
+                    videoPlaying = videoPlaying,
                 )
             }
+        }
+    }
 
-            Spacer(modifier = Modifier.height(14.dp))
-
-            ControlBlock(
-                title = "Pulse Width (Duty Cycle)",
-                valueText = "$duty% ON time",
-                helperText = "Higher duty cycle means the motor stays ON longer in each pulse, which feels stronger or more continuous.",
-            ) {
-                androidx.compose.material3.Slider(
-                    value = duty.toFloat(),
-                    onValueChange = { viewModel.setDuty(it.toInt()) },
-                    valueRange = 0f..100f,
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            ControlBlock(
-                title = "Frequency (Pulse Period)",
-                valueText = "$periodMs ms",
-                helperText = "Smaller values mean faster buzzing. Larger values mean slower thumps.",
-            ) {
-                androidx.compose.material3.Slider(
-                    value = periodMs.toFloat(),
-                    onValueChange = { viewModel.setPeriodMs(it.toInt()) },
-                    valueRange = 60f..1000f,
-                )
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Button(
-                    modifier = Modifier.weight(1f),
-                    onClick = { viewModel.startTest() },
-                    enabled = hasVibrator && !isTesting && !audioPlaying && !videoPlaying,
-                ) {
-                    Text("Start Test")
-                }
-                Button(
-                    modifier = Modifier.weight(1f),
-                    onClick = { viewModel.stopTest() },
-                    enabled = isTesting,
-                ) {
-                    Text("Stop")
-                }
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("Hardware Dashboard", style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("hasVibrator: $hasVibrator")
-                    Text("hasAmplitudeControl: $hasAmplitude")
-                    Text("isVibrating: $isTesting")
-                    Text("audioPlaying: $audioPlaying")
-                    Text("videoPlaying: $videoPlaying")
-                    Text("selectedAudio: ${selectedAudioName ?: "none"}")
-                    Text("selectedVideo: ${selectedVideoName ?: "none"}")
-                    Text("videoMap: ${selectedVideoMapName ?: "none"}")
-                }
-            }
+        if (isVideoFullscreen) {
+            VideoCompareFullscreenOverlay(
+                viewModel = viewModel,
+                videoPlayer = videoPlayer,
+                videoPlaying = videoPlaying,
+                compareSlots = compareSlots,
+                activeAlgorithm = activeCompareAlgorithm,
+                onDismiss = { isVideoFullscreen = false },
+            )
         }
     }
 }
 
 @Composable
-private fun VideoBlock(
+private fun IntensityCapCard(
+    amplitude: Int,
+    hasAmplitude: Boolean,
+    onAmplitudeChange: (Int) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text("Haptic Intensity Cap", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(
+                text = "$amplitude / 255 — scales all synced haptic output",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Slider(
+                value = amplitude.toFloat(),
+                onValueChange = { onAmplitudeChange(it.toInt()) },
+                valueRange = 0f..255f,
+            )
+            Text(
+                text = if (hasAmplitude) {
+                    "Hardware amplitude control available."
+                } else {
+                    "No hardware amplitude control — slider still caps software intensity."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun VideoTab(
     selectedVideoName: String?,
-    selectedVideoMapName: String?,
+    selectedHapticTrackName: String?,
+    hapticTrackFormat: HapticTrackFormat?,
+    hapticTrackLoading: Boolean,
+    compareSlots: Map<CompareAlgorithm, CompareSlotState>,
+    activeCompareAlgorithm: CompareAlgorithm?,
+    canPlayVideo: Boolean,
     videoPlaying: Boolean,
     videoPrepared: Boolean,
     videoHasAudio: Boolean,
     videoMapWindows: Int,
     videoMapWindowSizeMs: Long,
+    hapticTrackDurationMs: Long,
+    videoDurationMs: Long,
+    durationMismatch: Boolean,
     videoError: String?,
     onSelectVideo: () -> Unit,
-    onSelectMap: () -> Unit,
+    onSelectJson: () -> Unit,
+    onSelectWav: () -> Unit,
+    onLoadCompareSlot: (CompareAlgorithm) -> Unit,
+    onSwitchCompareSlot: (CompareAlgorithm) -> Unit,
     onPlayVideo: () -> Unit,
     onPauseVideo: () -> Unit,
     onStopVideo: () -> Unit,
-    onVideoPlayerReady: (PlayerView) -> Unit,
     onFullscreen: () -> Unit,
+    videoPlayer: ExoPlayer,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text("Video Playback Mode", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(4.dp))
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Synced Video Playback", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(
-                text = "Choose an mp4 and a generated haptic JSON map. The video preview runs in the app and the JSON windows trigger vibrations as playback advances.",
+                text = "Load an MP4 plus haptic tracks. Use A–D slots for ground-truth WAVs, then fullscreen to switch live.",
                 style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(modifier = Modifier.height(10.dp))
 
-            AndroidView(
-                factory = { context ->
-                    PlayerView(context).also {
-                        it.setBackgroundColor(android.graphics.Color.BLACK)
-                        it.keepScreenOn = false
-                        onVideoPlayerReady(it)
+            Text("Algorithm compare (WAV)", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                CompareAlgorithm.all.forEach { algorithm ->
+                    val slot = compareSlots[algorithm]
+                    val ready = slot?.isReady == true
+                    val loading = slot?.loading == true
+                    OutlinedButton(
+                        onClick = {
+                            if (ready) {
+                                onSwitchCompareSlot(algorithm)
+                            } else {
+                                onLoadCompareSlot(algorithm)
+                            }
+                        },
+                        enabled = !loading,
+                    ) {
+                        Text(
+                            when {
+                                loading -> "${algorithm.shortLabel}…"
+                                ready -> "${algorithm.shortLabel} ✓"
+                                else -> "Load ${algorithm.shortLabel}"
+                            },
+                        )
                     }
-                },
-                update = { view ->
-                    view.useController = true
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(220.dp),
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("Selected video: ${selectedVideoName ?: "none"}")
-            Text("Selected map: ${selectedVideoMapName ?: "none"}")
-            Text("Map windows: $videoMapWindows")
-            Text("Map window size: ${if (videoMapWindowSizeMs > 0) "$videoMapWindowSizeMs ms" else "unknown"}")
-            Text(if (videoPrepared) "Video ready" else "Video not loaded yet")
-            Text(if (videoHasAudio) "Audio track detected" else "No audio track detected yet")
-            Text(if (videoPlaying) "Video playing" else "Video stopped")
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = onSelectVideo) { Text("Open Video") }
-                Button(onClick = onSelectMap) { Text("Open JSON") }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(
-                    onClick = onPlayVideo,
-                    enabled = selectedVideoName != null && selectedVideoMapName != null && videoPrepared,
-                ) {
-                    Text("Play")
-                }
-                Button(
-                    onClick = onFullscreen,
-                    enabled = selectedVideoName != null,
-                ) {
-                    Text("Fullscreen")
-                }
-                Button(
-                    onClick = onStopVideo,
-                    enabled = selectedVideoName != null,
-                ) {
-                    Text("Stop")
-                }
-                Button(
-                    onClick = onPauseVideo,
-                    enabled = videoPlaying,
-                ) {
-                    Text("Pause")
                 }
             }
-
-            if (videoError != null) {
-                Spacer(modifier = Modifier.height(4.dp))
+            activeCompareAlgorithm?.let { active ->
                 Text(
-                    text = videoError,
+                    text = "Active: ${active.shortLabel} (${active.description})",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            compareSlots.values.filter { it.error != null }.forEach { slot ->
+                Text(
+                    text = "${slot.algorithm.shortLabel}: ${slot.error}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("Single track (optional JSON/WAV)", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
+
+            AndroidView(
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        setBackgroundColor(android.graphics.Color.BLACK)
+                        player = videoPlayer
+                        useController = true
+                        setShowNextButton(false)
+                        setShowPreviousButton(false)
+                        setShowFastForwardButton(false)
+                        setShowRewindButton(false)
+                    }
+                },
+                update = { it.player = videoPlayer },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+            )
+
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatusChip(label = if (videoPrepared) "Video ready" else "No video")
+                StatusChip(label = if (videoHasAudio) "Audio track" else "No audio")
+                StatusChip(label = if (videoPlaying) "Playing" else "Stopped")
+                if (hapticTrackFormat != null) {
+                    StatusChip(label = "Track: ${hapticTrackFormat.name}")
+                }
+            }
+
+            FileRow(label = "Video", value = selectedVideoName)
+            FileRow(label = "Haptic track", value = selectedHapticTrackName)
+
+            if (videoMapWindows > 0) {
+                Text(
+                    text = "$videoMapWindows windows · ${videoMapWindowSizeMs}ms each · track ${formatDuration(hapticTrackDurationMs)}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            if (videoDurationMs > 0L) {
+                Text(
+                    text = "Video duration: ${formatDuration(videoDurationMs)}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+
+            if (durationMismatch) {
+                Text(
+                    text = "Duration mismatch between video and haptic track — haptics may stop early or drift.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+
+            if (hapticTrackLoading) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    CircularProgressIndicator(modifier = Modifier.height(20.dp).width(20.dp), strokeWidth = 2.dp)
+                    Text("Loading haptic track…", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onSelectVideo, modifier = Modifier.weight(1f)) { Text("Video") }
+                OutlinedButton(onClick = onSelectWav, modifier = Modifier.weight(1f)) { Text("WAV") }
+                OutlinedButton(onClick = onSelectJson, modifier = Modifier.weight(1f)) { Text("JSON") }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onPlayVideo,
+                    enabled = canPlayVideo,
+                    modifier = Modifier.weight(1f),
+                ) { Text("Play") }
+                OutlinedButton(onClick = onPauseVideo, enabled = videoPlaying, modifier = Modifier.weight(1f)) { Text("Pause") }
+                OutlinedButton(onClick = onStopVideo, enabled = selectedVideoName != null, modifier = Modifier.weight(1f)) { Text("Stop") }
+            }
+
+            OutlinedButton(onClick = onFullscreen, enabled = selectedVideoName != null, modifier = Modifier.fillMaxWidth()) {
+                Text("Fullscreen + live A/B/C/D switch")
+            }
+
+            if (videoError != null) {
+                Text(text = videoError, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
         }
     }
 }
 
 @Composable
-private fun AudioBlock(
+private fun AudioTab(
     selectedAudioName: String?,
     audioPlaying: Boolean,
     recordAudioGranted: Boolean,
@@ -482,103 +595,176 @@ private fun AudioBlock(
     audioError: String?,
     audioAnalyzing: Boolean,
     audioAnalysisReady: Boolean,
+    audioSensitivityLevel: Int,
+    audioDebugFrames: List<AudioDebugFrame>,
     onSelectAudio: () -> Unit,
     onGrantPermission: () -> Unit,
     onPlayAudio: () -> Unit,
     onPauseAudio: () -> Unit,
     onStopAudio: () -> Unit,
+    onSensitivityChange: (Int) -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text("Audio Playback Mode", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(4.dp))
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Live Audio Analysis", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(
-                text = "Pick an audio file and let the phone build a beat timeline from bass and drum peaks before playback.",
+                text = "Detects bass and drum hits in real time. Do not use haptic-groundtruth WAV files here — use Video mode instead.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            FileRow(label = "Audio file", value = selectedAudioName)
+            Text(
+                text = when {
+                    audioAnalyzing -> "Analyzing track…"
+                    audioAnalysisReady -> "Beat timeline ready"
+                    else -> "Live fallback mode"
+                },
                 style = MaterialTheme.typography.bodySmall,
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("Selected file: ${selectedAudioName ?: "none"}")
-            Text("Audio level: $audioLevel%")
-            Text(if (audioAnalyzing) "Analyzing track..." else if (audioAnalysisReady) "Analysis ready" else "Analysis fallback only")
-            Spacer(modifier = Modifier.height(8.dp))
-            LinearProgressIndicator(
-                progress = audioLevel / 100f,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = onSelectAudio) { Text("Open Audio") }
+
+            LinearProgressIndicator(progress = audioLevel / 100f, modifier = Modifier.fillMaxWidth())
+            Text("Level: $audioLevel%", style = MaterialTheme.typography.bodySmall)
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onSelectAudio) { Text("Open Audio") }
                 Button(onClick = onPlayAudio, enabled = selectedAudioName != null && !audioPlaying && !audioAnalyzing) { Text("Play") }
-                Button(onClick = onPauseAudio, enabled = audioPlaying) { Text("Pause") }
-                Button(onClick = onStopAudio, enabled = selectedAudioName != null) { Text("Stop") }
+                OutlinedButton(onClick = onPauseAudio, enabled = audioPlaying) { Text("Pause") }
+                OutlinedButton(onClick = onStopAudio, enabled = selectedAudioName != null) { Text("Stop") }
             }
+
+            Text("Sensitivity: $audioSensitivityLevel / 10", style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = audioSensitivityLevel.toFloat(),
+                onValueChange = { onSensitivityChange(it.toInt()) },
+                valueRange = 1f..10f,
+                steps = 8,
+            )
+
             if (!recordAudioGranted) {
-                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Microphone permission is needed for Visualizer-based audio tracking. Grant it to let the app analyze bass and drum energy from the playing track.",
+                    text = "Microphone permission is needed for Visualizer-based tracking.",
                     style = MaterialTheme.typography.bodySmall,
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(onClick = onGrantPermission) {
-                    Text("Grant Audio Permission")
-                }
+                OutlinedButton(onClick = onGrantPermission) { Text("Grant Permission") }
             }
+
             if (audioError != null) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = audioError,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
+                Text(text = audioError, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
         }
+    }
+
+    if (audioDebugFrames.isNotEmpty()) {
+        DebugTimelineCard(frames = audioDebugFrames)
     }
 }
 
 @Composable
-private fun ControlBlock(
-    title: String,
-    valueText: String,
-    helperText: String,
-    slider: @Composable () -> Unit,
+private fun ManualTestTab(
+    duty: Int,
+    periodMs: Int,
+    isTesting: Boolean,
+    hasVibrator: Boolean,
+    audioPlaying: Boolean,
+    videoPlaying: Boolean,
+    onDutyChange: (Int) -> Unit,
+    onPeriodChange: (Int) -> Unit,
+    onStartTest: () -> Unit,
+    onStopTest: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(valueText, style = MaterialTheme.typography.bodyMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            slider()
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(helperText, style = MaterialTheme.typography.bodySmall)
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Manual Motor Test", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                text = "Pulse the vibrator directly to verify amplitude and duty cycle on this device.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Text("Duty cycle: $duty%", style = MaterialTheme.typography.bodyMedium)
+            Slider(value = duty.toFloat(), onValueChange = { onDutyChange(it.toInt()) }, valueRange = 0f..100f)
+
+            Text("Period: $periodMs ms", style = MaterialTheme.typography.bodyMedium)
+            Slider(value = periodMs.toFloat(), onValueChange = { onPeriodChange(it.toInt()) }, valueRange = 60f..1000f)
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onStartTest,
+                    enabled = hasVibrator && !isTesting && !audioPlaying && !videoPlaying,
+                    modifier = Modifier.weight(1f),
+                ) { Text("Start") }
+                Button(
+                    onClick = onStopTest,
+                    enabled = isTesting,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                ) { Text("Stop") }
+            }
         }
     }
 }
 
 @Composable
-private fun DebugTimelineCard(
-    frames: List<AudioDebugFrame>,
+private fun HardwareStatusCard(
+    hasVibrator: Boolean,
+    hasAmplitude: Boolean,
+    isTesting: Boolean,
+    audioPlaying: Boolean,
+    videoPlaying: Boolean,
 ) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Device", style = MaterialTheme.typography.labelLarge)
+            Text("Vibrator: ${if (hasVibrator) "yes" else "no"} · Amplitude control: ${if (hasAmplitude) "yes" else "no"}")
+            Text("Active: ${listOfNotNull(
+                if (isTesting) "manual test" else null,
+                if (audioPlaying) "audio" else null,
+                if (videoPlaying) "video" else null,
+            ).joinToString(", ").ifBlank { "idle" }}")
+        }
+    }
+}
+
+@Composable
+private fun FileRow(label: String, value: String?) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("$label:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
+        Text(value ?: "not selected", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun StatusChip(label: String) {
+    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelSmall,
+        )
+    }
+}
+
+private fun formatDuration(ms: Long): String {
+    val totalSec = (ms / 1000).coerceAtLeast(0)
+    val min = totalSec / 60
+    val sec = totalSec % 60
+    return "%d:%02d".format(min, sec)
+}
+
+@Composable
+private fun DebugTimelineCard(frames: List<AudioDebugFrame>) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text("Debug Timeline", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Top lane = audio envelope. Bottom lane = generated haptic events.",
-                style = MaterialTheme.typography.bodySmall,
-            )
             Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TimelineLegendItem(color = Color(0xFF6B4BB5), label = "Audio")
-                TimelineLegendItem(color = Color(0xFFFF7043), label = "Bass")
-                TimelineLegendItem(color = Color(0xFF42A5F5), label = "Drum")
-                TimelineLegendItem(color = Color(0xFF26A69A), label = "Sustain")
-            }
-            Spacer(modifier = Modifier.height(10.dp))
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(220.dp),
+                    .height(180.dp),
             ) {
                 val width = size.width
                 val height = size.height
@@ -593,58 +779,20 @@ private fun DebugTimelineCard(
                 val eventMidY = height * 0.78f
                 val eventHeight = height * 0.18f
 
-                drawLine(
-                    color = Color(0xFFD9D2E8),
-                    start = Offset(0f, audioMidY),
-                    end = Offset(width, audioMidY),
-                    strokeWidth = 2f,
-                    cap = StrokeCap.Round,
-                )
-                drawLine(
-                    color = Color(0xFFD9D2E8),
-                    start = Offset(0f, eventMidY),
-                    end = Offset(width, eventMidY),
-                    strokeWidth = 2f,
-                    cap = StrokeCap.Round,
-                )
-                for (i in 0..4) {
-                    val y = height * (0.08f + i * 0.12f)
-                    drawLine(
-                        color = Color(0xFFEAE4F4),
-                        start = Offset(0f, y),
-                        end = Offset(width, y),
-                        strokeWidth = 1f,
-                    )
-                }
-
                 val points = samples.mapIndexed { index, frame ->
                     val x = index * stepX
-                    val normalized = (frame.level.coerceIn(0, 100) / 100f)
-                    val y = audioMidY - (normalized * audioHeight)
-                    Offset(x, y)
+                    val normalized = frame.level.coerceIn(0, 100) / 100f
+                    Offset(x, audioMidY - (normalized * audioHeight))
                 }
 
                 for (i in 0 until points.lastIndex) {
-                    drawLine(
-                        color = Color(0xFF6B4BB5),
-                        start = points[i],
-                        end = points[i + 1],
-                        strokeWidth = 4f,
-                        cap = StrokeCap.Round,
-                    )
-                }
-
-                points.forEach { point ->
-                    drawCircle(Color(0xFF8E63D6), radius = 3f, center = point)
+                    drawLine(Color(0xFF6B4BB5), points[i], points[i + 1], strokeWidth = 4f, cap = StrokeCap.Round)
                 }
 
                 samples.forEachIndexed { index, frame ->
                     val pulse = frame.pulse ?: return@forEachIndexed
                     val x = index * stepX
-                    val laneTop = height * 0.58f
-                    val laneBottom = height * 0.96f
-                    val barTop = if (pulse.isSustained) laneTop + eventHeight * 0.10f else laneTop + eventHeight * 0.28f
-                    val barBottom = laneBottom
+                    val barTop = if (pulse.isSustained) eventMidY - eventHeight * 0.6f else eventMidY - eventHeight * 0.3f
                     val barColor = when {
                         pulse.isSustained -> Color(0xFF26A69A)
                         pulse.isBass && pulse.isDrum -> Color(0xFFEF6C00)
@@ -652,41 +800,9 @@ private fun DebugTimelineCard(
                         pulse.isDrum -> Color(0xFF42A5F5)
                         else -> Color(0xFF7E57C2)
                     }
-                    drawLine(
-                        color = Color(0xFFE7DFF3),
-                        start = Offset(x, laneTop),
-                        end = Offset(x, laneBottom),
-                        strokeWidth = 1f,
-                    )
-                    drawLine(
-                        color = barColor,
-                        start = Offset(x, barBottom),
-                        end = Offset(x, barTop),
-                        strokeWidth = 6f,
-                        cap = StrokeCap.Round,
-                    )
-                    drawCircle(barColor, radius = 6f, center = Offset(x, barTop + 8f))
+                    drawLine(barColor, Offset(x, eventMidY), Offset(x, barTop), strokeWidth = 6f, cap = StrokeCap.Round)
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("Purple line = audio level history. Lower lane markers show which haptic type fired at that moment.", style = MaterialTheme.typography.bodySmall)
         }
-    }
-}
-
-@Composable
-private fun TimelineLegendItem(
-    color: Color,
-    label: String,
-) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Canvas(
-            modifier = Modifier
-                .width(10.dp)
-                .height(10.dp),
-        ) {
-            drawCircle(color = color, radius = size.minDimension / 2f)
-        }
-        Text(label, style = MaterialTheme.typography.bodySmall)
     }
 }
