@@ -134,7 +134,7 @@ fun VideoCompareFullscreenOverlay(
                         )
                         Text(
                             text = activeAlgorithm?.let { "Active: ${it.shortLabel} · ${it.description}" }
-                                ?: "Tap A–D to switch haptics",
+                                ?: "Tap A–E to switch haptics",
                             color = Color.White.copy(alpha = 0.85f),
                             style = MaterialTheme.typography.bodySmall,
                         )

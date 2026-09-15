@@ -5,6 +5,7 @@ enum class CompareAlgorithm(val id: String, val shortLabel: String, val descript
     B("b", "B", "Freq shift"),
     C("c", "C", "Pitch match"),
     D("d", "D", "HapticGen"),
+    E("e", "E", "Rule-based"),
     ;
 
     companion object {

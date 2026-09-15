@@ -1,7 +1,10 @@
 package com.example.haptictester.viewmodel
 
 import android.app.Application
+import android.content.Intent
 import android.net.Uri
+import androidx.documentfile.provider.DocumentFile
+import java.io.File
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -15,6 +18,7 @@ import com.example.haptictester.haptic.AudioHapticController
 import com.example.haptictester.haptic.AudioHapticController.HapticPulseDebug
 import com.example.haptictester.haptic.CompareAlgorithm
 import com.example.haptictester.haptic.CompareSlotState
+import com.example.haptictester.haptic.HapticFolderMatcher
 import com.example.haptictester.haptic.HapticController
 import com.example.haptictester.haptic.HapticTrackFormat
 import com.example.haptictester.haptic.VideoHapticController
@@ -53,6 +57,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     private var hapticTrackToken: Long = 0L
     private val compareLoadJobs = mutableMapOf<CompareAlgorithm, Job>()
     private val compareLoadTokens = mutableMapOf<CompareAlgorithm, Long>()
+    private val compareSlotUris = mutableMapOf<CompareAlgorithm, Uri>()
 
     private val _compareSlots = MutableStateFlow(defaultCompareSlots())
     val compareSlots = _compareSlots.asStateFlow()
@@ -60,7 +65,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     private val _activeCompareAlgorithm = MutableStateFlow<CompareAlgorithm?>(null)
     val activeCompareAlgorithm = _activeCompareAlgorithm.asStateFlow()
 
-    private val _amplitude = MutableStateFlow(128)
+    private val _amplitude = MutableStateFlow(255)
     val amplitude = _amplitude.asStateFlow()
 
     private val _duty = MutableStateFlow(50)
@@ -77,6 +82,9 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _hasVibrator = MutableStateFlow(haptic.hasVibrator())
     val hasVibrator = _hasVibrator.asStateFlow()
+
+    private val _hasPrimitives = MutableStateFlow(haptic.hasScalablePrimitives())
+    val hasPrimitives = _hasPrimitives.asStateFlow()
 
     private val _selectedAudioName = MutableStateFlow<String?>(null)
     val selectedAudioName = _selectedAudioName.asStateFlow()
@@ -132,6 +140,21 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     private val _hapticTrackDurationMs = MutableStateFlow(0L)
     val hapticTrackDurationMs = _hapticTrackDurationMs.asStateFlow()
 
+    private val _eventTriggerMode = MutableStateFlow(false)
+    val eventTriggerMode = _eventTriggerMode.asStateFlow()
+
+    private val _pipelineEventsName = MutableStateFlow<String?>(null)
+    val pipelineEventsName = _pipelineEventsName.asStateFlow()
+
+    private val _pipelineEventCount = MutableStateFlow(0)
+    val pipelineEventCount = _pipelineEventCount.asStateFlow()
+
+    private val _demoVideoUri = MutableStateFlow<Uri?>(null)
+    val demoVideoUri = _demoVideoUri.asStateFlow()
+
+    private val _folderSummary = MutableStateFlow<String?>(null)
+    val folderSummary = _folderSummary.asStateFlow()
+
     init {
         pushAudioTuning()
     }
@@ -149,6 +172,43 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     fun setPeriodMs(value: Int) {
         _periodMs.value = value.coerceIn(60, 1000)
         requestLiveUpdate()
+    }
+
+    fun setEventTriggerMode(enabled: Boolean) {
+        _eventTriggerMode.value = enabled
+        videoHaptic.setEventTriggerMode(enabled)
+
+        loadedHapticTrackUri?.let { uri ->
+            if (_hapticTrackFormat.value == HapticTrackFormat.WAV) {
+                loadHapticTrack(uri, HapticTrackFormat.WAV)
+            }
+        }
+        compareSlotUris.forEach { (algorithm, uri) ->
+            loadCompareSlot(algorithm, uri)
+        }
+    }
+
+    fun loadPipelineEvents(uri: Uri) {
+        val app = getApplication<Application>()
+        takePersistableReadPermission(app, uri)
+        _videoError.value = null
+        viewModelScope.launch {
+            try {
+                val label = withContext(Dispatchers.IO) {
+                    videoHaptic.loadPipelineEvents(uri)
+                }
+                _pipelineEventsName.value = label
+                _pipelineEventCount.value = videoHaptic.getPipelineEventCount()
+                if (!_eventTriggerMode.value && !videoHaptic.hasLoadedTrack()) {
+                    setEventTriggerMode(true)
+                }
+            } catch (throwable: Throwable) {
+                _pipelineEventsName.value = null
+                _pipelineEventCount.value = 0
+                videoHaptic.clearPipelineEvents()
+                _videoError.value = throwable.message ?: throwable.toString()
+            }
+        }
     }
 
     fun startTest() {
@@ -234,6 +294,154 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         haptic.cancel()
     }
 
+    fun loadBundledDemo() {
+        val app = getApplication<Application>()
+        viewModelScope.launch {
+            try {
+                val dir = withContext(Dispatchers.IO) {
+                    unpackDemoAssets(app)
+                } ?: return@launch
+                val video = File(dir, "video.mp4")
+                if (!video.exists()) return@launch
+
+                setEventTriggerMode(true)
+                val videoUri = Uri.fromFile(video)
+                loadVideo(videoUri)
+                _demoVideoUri.value = videoUri
+
+                val slots = listOf(
+                    CompareAlgorithm.A to "algorithm_a_perception_mapping.wav",
+                    CompareAlgorithm.B to "algorithm_b_frequency_shifting.wav",
+                    CompareAlgorithm.C to "algorithm_c_pitch_matching.wav",
+                    CompareAlgorithm.D to "algorithm_d_haptic_gen.wav",
+                    CompareAlgorithm.E to "algorithm_e_rule_based.wav",
+                )
+                for ((algorithm, name) in slots) {
+                    val wav = File(dir, name)
+                    if (wav.exists()) {
+                        loadCompareSlot(algorithm, Uri.fromFile(wav))
+                    }
+                }
+                // Read events from APK assets directly (avoid stale file:// / SAF copies).
+                val eventsJson = withContext(Dispatchers.IO) {
+                    runCatching {
+                        app.assets.open("demo/events.json").bufferedReader().use { it.readText() }
+                    }.getOrNull()
+                }
+                if (!eventsJson.isNullOrBlank()) {
+                    loadPipelineEventsJson(eventsJson, label = "demo/events.json")
+                } else {
+                    val events = File(dir, "events.json")
+                    if (events.exists()) {
+                        loadPipelineEvents(Uri.fromFile(events))
+                    }
+                }
+            } catch (throwable: Throwable) {
+                _videoError.value = throwable.message ?: throwable.toString()
+            }
+        }
+    }
+
+    fun loadPipelineEventsJson(jsonText: String, label: String = "events.json") {
+        _videoError.value = null
+        viewModelScope.launch {
+            try {
+                val loaded = withContext(Dispatchers.IO) {
+                    videoHaptic.loadPipelineEventsJson(jsonText, label)
+                }
+                _pipelineEventsName.value = loaded
+                _pipelineEventCount.value = videoHaptic.getPipelineEventCount()
+                if (!_eventTriggerMode.value && !videoHaptic.hasLoadedTrack()) {
+                    setEventTriggerMode(true)
+                }
+            } catch (throwable: Throwable) {
+                _pipelineEventsName.value = null
+                _pipelineEventCount.value = 0
+                videoHaptic.clearPipelineEvents()
+                _videoError.value = throwable.message ?: throwable.toString()
+            }
+        }
+    }
+
+    fun loadFolder(treeUri: Uri) {
+        val app = getApplication<Application>()
+        viewModelScope.launch {
+            try {
+                takePersistableTreePermission(app, treeUri)
+                val children = withContext(Dispatchers.IO) {
+                    val root = DocumentFile.fromTreeUri(app, treeUri)
+                        ?: throw IllegalArgumentException("Unable to open the selected folder")
+                    root.listFiles().filter { it.isFile && !it.name.isNullOrBlank() }
+                }
+                val byName = children.associateBy { it.name!! }
+                val match = HapticFolderMatcher.match(byName.keys.toList())
+                if (match.isEmpty) {
+                    _folderSummary.value = null
+                    _videoError.value = "No video, A–E WAVs, or events.json found in that folder."
+                    return@launch
+                }
+
+                setEventTriggerMode(true)
+                _folderSummary.value = match.summary()
+                _videoError.value = null
+
+                match.videoName?.let { name ->
+                    val uri = byName[name]?.uri ?: return@let
+                    loadVideo(uri)
+                    _demoVideoUri.value = uri
+                }
+                for ((algorithm, name) in match.slotNames) {
+                    val uri = byName[name]?.uri ?: continue
+                    loadCompareSlot(algorithm, uri)
+                }
+                match.eventsName?.let { name ->
+                    byName[name]?.uri?.let { loadPipelineEvents(it) }
+                }
+                if (match.slotNames.isEmpty()) {
+                    match.hapticJsonName?.let { name ->
+                        byName[name]?.uri?.let { loadVideoHapticMap(it) }
+                    }
+                }
+            } catch (throwable: Throwable) {
+                _folderSummary.value = null
+                _videoError.value = throwable.message ?: throwable.toString()
+            }
+        }
+    }
+
+    private fun takePersistableTreePermission(app: Application, uri: Uri) {
+        try {
+            app.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+            )
+        } catch (_: Exception) {
+            try {
+                app.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            } catch (_: Exception) {
+                // one-shot tree grants still allow listing for this session
+            }
+        }
+    }
+
+    private fun unpackDemoAssets(app: Application): File? {
+        val names = app.assets.list("demo") ?: return null
+        if (names.isEmpty()) return null
+        val dir = File(app.cacheDir, "demo")
+        dir.mkdirs()
+        for (name in names) {
+            app.assets.open("demo/$name").use { input ->
+                File(dir, name).outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+        }
+        return dir
+    }
+
     fun loadVideo(uri: Uri) {
         val app = getApplication<Application>()
         loadedVideoUri = uri
@@ -252,6 +460,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
 
     fun loadCompareSlot(algorithm: CompareAlgorithm, uri: Uri) {
         val app = getApplication<Application>()
+        compareSlotUris[algorithm] = uri
         takePersistableReadPermission(app, uri)
         val fileName = resolveDisplayName(app, uri) ?: algorithm.shortLabel
 
@@ -266,7 +475,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         compareLoadJobs[algorithm] = viewModelScope.launch {
             try {
                 val map = withContext(Dispatchers.IO) {
-                    WavHapticParser.parse(app, uri)
+                    WavHapticParser.parse(app, uri, eventTriggerMode = _eventTriggerMode.value)
                 }
                 if (compareLoadTokens[algorithm] != token) return@launch
 
@@ -387,7 +596,9 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
             _videoError.value = "Load a video file before playing."
             return
         }
-        val hasTrack = videoHaptic.hasLoadedTrack() || hasAnyCompareSlotReady()
+        val hasTrack = videoHaptic.hasLoadedTrack() ||
+            hasAnyCompareSlotReady() ||
+            (_eventTriggerMode.value && videoHaptic.hasPipelineEvents())
         if (!hasTrack) {
             _videoError.value = "Load a haptic track (JSON, WAV, or A–D compare slots) before playing."
             return
@@ -423,6 +634,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
 
     fun onVideoPlaybackPosition(positionMs: Int, @Suppress("UNUSED_PARAMETER") videoDurationMs: Long = 0L) {
         if (!_videoPlaying.value) return
+        if (!videoHaptic.hasLoadedTrack() && !videoHaptic.hasPipelineEvents()) return
         videoHaptic.updatePlaybackPosition(positionMs.toLong(), _amplitude.value)
     }
 
@@ -576,8 +788,8 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
                 uri,
                 android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
             )
-        } catch (_: SecurityException) {
-            // temporary permission is enough for this session
+        } catch (_: Exception) {
+            // file:// demo URIs and one-shot picker grants do not persist
         }
     }
 

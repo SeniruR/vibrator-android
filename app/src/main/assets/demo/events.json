@@ -1,0 +1,135 @@
+{
+  "detector": {},
+  "sustained_gate": {},
+  "no_events_detected": false,
+  "no_haptic_events": false,
+  "gate_categories_used": [
+    "weather",
+    "gunshot",
+    "explosion",
+    "vehicle"
+  ],
+  "timeline_hz": 100,
+  "haptic_outputs": {
+    "gated_audio": "gated_audio.wav",
+    "algorithm_a": "algorithm_a_perception_mapping.wav",
+    "algorithm_b": "algorithm_b_frequency_shifting.wav",
+    "algorithm_c": "algorithm_c_pitch_matching.wav",
+    "algorithm_d": "algorithm_d_haptic_gen.wav",
+    "algorithm_e": "algorithm_e_rule_based.wav"
+  },
+  "events": [
+    {
+      "event_id": "event_001",
+      "category": "vehicle",
+      "label": "Vehicle",
+      "start_sec": 0.092,
+      "peak_sec": 14.36,
+      "end_sec": 18.625,
+      "confidence": 0.6,
+      "context_token": false,
+      "audio_score": null,
+      "video_score": null,
+      "sources": [
+        "manual"
+      ],
+      "included_in_gate": true
+    },
+    {
+      "event_id": "event_002",
+      "category": "explosion",
+      "label": "Explosion",
+      "start_sec": 9.77,
+      "peak_sec": 9.85,
+      "end_sec": 10.45,
+      "confidence": 0.7,
+      "context_token": false,
+      "audio_score": null,
+      "video_score": null,
+      "sources": [
+        "manual"
+      ],
+      "included_in_gate": true
+    },
+    {
+      "event_id": "event_003",
+      "category": "explosion",
+      "label": "Explosion",
+      "start_sec": 10.92,
+      "peak_sec": 11.0,
+      "end_sec": 11.4,
+      "confidence": 0.75,
+      "context_token": false,
+      "audio_score": null,
+      "video_score": null,
+      "sources": [
+        "manual"
+      ],
+      "included_in_gate": true
+    },
+    {
+      "event_id": "event_004",
+      "category": "explosion",
+      "label": "Explosion",
+      "start_sec": 11.42,
+      "peak_sec": 11.52,
+      "end_sec": 12.05,
+      "confidence": 0.85,
+      "context_token": false,
+      "audio_score": null,
+      "video_score": null,
+      "sources": [
+        "manual"
+      ],
+      "included_in_gate": true
+    },
+    {
+      "event_id": "event_005",
+      "category": "explosion",
+      "label": "Explosion",
+      "start_sec": 12.2,
+      "peak_sec": 12.267,
+      "end_sec": 12.7,
+      "confidence": 0.7,
+      "context_token": false,
+      "audio_score": null,
+      "video_score": null,
+      "sources": [
+        "manual"
+      ],
+      "included_in_gate": true
+    },
+    {
+      "event_id": "event_006",
+      "category": "explosion",
+      "label": "Explosion",
+      "start_sec": 14.72,
+      "peak_sec": 14.8,
+      "end_sec": 15.5,
+      "confidence": 0.75,
+      "context_token": false,
+      "audio_score": null,
+      "video_score": null,
+      "sources": [
+        "manual"
+      ],
+      "included_in_gate": true
+    },
+    {
+      "event_id": "event_007",
+      "category": "explosion",
+      "label": "Explosion",
+      "start_sec": 16.3,
+      "peak_sec": 16.39,
+      "end_sec": 17.0,
+      "confidence": 0.7,
+      "context_token": false,
+      "audio_score": null,
+      "video_score": null,
+      "sources": [
+        "manual"
+      ],
+      "included_in_gate": true
+    }
+  ]
+}

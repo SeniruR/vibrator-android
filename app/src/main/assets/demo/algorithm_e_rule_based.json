@@ -1,0 +1,5057 @@
+{
+  "window_size_ms": 40,
+  "track": {
+    "0": 255,
+    "40": 0,
+    "80": 200,
+    "120": 200,
+    "160": 200,
+    "200": 200,
+    "240": 200,
+    "280": 192,
+    "320": 200,
+    "360": 200,
+    "400": 200,
+    "440": 200,
+    "480": 200,
+    "520": 213,
+    "560": 200,
+    "600": 200,
+    "640": 200,
+    "680": 200,
+    "720": 200,
+    "760": 200,
+    "800": 184,
+    "840": 200,
+    "880": 200,
+    "920": 191,
+    "960": 200,
+    "1000": 200,
+    "1040": 220,
+    "1080": 200,
+    "1120": 200,
+    "1160": 184,
+    "1200": 157,
+    "1240": 200,
+    "1280": 219,
+    "1320": 200,
+    "1360": 200,
+    "1400": 200,
+    "1440": 200,
+    "1480": 200,
+    "1520": 227,
+    "1560": 200,
+    "1600": 200,
+    "1640": 200,
+    "1680": 200,
+    "1720": 200,
+    "1760": 216,
+    "1800": 200,
+    "1840": 200,
+    "1880": 200,
+    "1920": 200,
+    "1960": 200,
+    "2000": 255,
+    "2040": 255,
+    "2080": 200,
+    "2120": 200,
+    "2160": 200,
+    "2200": 200,
+    "2240": 200,
+    "2280": 255,
+    "2320": 200,
+    "2360": 200,
+    "2400": 200,
+    "2440": 200,
+    "2480": 200,
+    "2520": 255,
+    "2560": 200,
+    "2600": 200,
+    "2640": 200,
+    "2680": 200,
+    "2720": 200,
+    "2760": 255,
+    "2800": 200,
+    "2840": 200,
+    "2880": 200,
+    "2920": 200,
+    "2960": 200,
+    "3000": 255,
+    "3040": 200,
+    "3080": 200,
+    "3120": 200,
+    "3160": 200,
+    "3200": 200,
+    "3240": 255,
+    "3280": 200,
+    "3320": 200,
+    "3360": 200,
+    "3400": 200,
+    "3440": 200,
+    "3480": 255,
+    "3520": 200,
+    "3560": 200,
+    "3600": 200,
+    "3640": 200,
+    "3680": 200,
+    "3720": 255,
+    "3760": 200,
+    "3800": 200,
+    "3840": 200,
+    "3880": 200,
+    "3920": 200,
+    "3960": 255,
+    "4000": 200,
+    "4040": 200,
+    "4080": 200,
+    "4120": 200,
+    "4160": 200,
+    "4200": 239,
+    "4240": 200,
+    "4280": 200,
+    "4320": 200,
+    "4360": 200,
+    "4400": 200,
+    "4440": 255,
+    "4480": 200,
+    "4520": 200,
+    "4560": 200,
+    "4600": 200,
+    "4640": 200,
+    "4680": 255,
+    "4720": 200,
+    "4760": 200,
+    "4800": 200,
+    "4840": 200,
+    "4880": 200,
+    "4920": 255,
+    "4960": 168,
+    "5000": 155,
+    "5040": 138,
+    "5080": 112,
+    "5120": 176,
+    "5160": 182,
+    "5200": 162,
+    "5240": 194,
+    "5280": 192,
+    "5320": 120,
+    "5360": 200,
+    "5400": 200,
+    "5440": 193,
+    "5480": 200,
+    "5520": 200,
+    "5560": 113,
+    "5600": 192,
+    "5640": 200,
+    "5680": 188,
+    "5720": 197,
+    "5760": 200,
+    "5800": 124,
+    "5840": 200,
+    "5880": 172,
+    "5920": 129,
+    "5960": 200,
+    "6000": 174,
+    "6040": 118,
+    "6080": 200,
+    "6120": 132,
+    "6160": 134,
+    "6200": 108,
+    "6240": 200,
+    "6280": 183,
+    "6320": 200,
+    "6360": 200,
+    "6400": 173,
+    "6440": 169,
+    "6480": 200,
+    "6520": 184,
+    "6560": 200,
+    "6600": 200,
+    "6640": 200,
+    "6680": 193,
+    "6720": 153,
+    "6760": 144,
+    "6800": 174,
+    "6840": 200,
+    "6880": 183,
+    "6920": 174,
+    "6960": 169,
+    "7000": 135,
+    "7040": 169,
+    "7080": 161,
+    "7120": 90,
+    "7160": 95,
+    "7200": 126,
+    "7240": 162,
+    "7280": 143,
+    "7320": 200,
+    "7360": 200,
+    "7400": 63,
+    "7440": 53,
+    "7480": 140,
+    "7520": 89,
+    "7560": 137,
+    "7600": 160,
+    "7640": 200,
+    "7680": 200,
+    "7720": 162,
+    "7760": 200,
+    "7800": 131,
+    "7840": 91,
+    "7880": 106,
+    "7920": 120,
+    "7960": 127,
+    "8000": 91,
+    "8040": 151,
+    "8080": 61,
+    "8120": 200,
+    "8160": 200,
+    "8200": 186,
+    "8240": 180,
+    "8280": 65,
+    "8320": 159,
+    "8360": 200,
+    "8400": 163,
+    "8440": 152,
+    "8480": 174,
+    "8520": 200,
+    "8560": 200,
+    "8600": 184,
+    "8640": 68,
+    "8680": 144,
+    "8720": 127,
+    "8760": 108,
+    "8800": 150,
+    "8840": 89,
+    "8880": 52,
+    "8920": 129,
+    "8960": 63,
+    "9000": 49,
+    "9040": 200,
+    "9080": 142,
+    "9120": 133,
+    "9160": 91,
+    "9200": 86,
+    "9240": 200,
+    "9280": 166,
+    "9320": 246,
+    "9360": 200,
+    "9400": 111,
+    "9440": 102,
+    "9480": 196,
+    "9520": 200,
+    "9560": 234,
+    "9600": 200,
+    "9640": 200,
+    "9680": 119,
+    "9720": 200,
+    "9760": 200,
+    "9800": 255,
+    "9840": 200,
+    "9880": 200,
+    "9920": 200,
+    "9960": 200,
+    "10000": 200,
+    "10040": 245,
+    "10080": 200,
+    "10120": 200,
+    "10160": 200,
+    "10200": 158,
+    "10240": 107,
+    "10280": 255,
+    "10320": 110,
+    "10360": 76,
+    "10400": 73,
+    "10440": 170,
+    "10480": 127,
+    "10520": 255,
+    "10560": 169,
+    "10600": 55,
+    "10640": 126,
+    "10680": 142,
+    "10720": 160,
+    "10760": 255,
+    "10800": 95,
+    "10840": 119,
+    "10880": 108,
+    "10920": 200,
+    "10960": 144,
+    "11000": 255,
+    "11040": 96,
+    "11080": 167,
+    "11120": 200,
+    "11160": 156,
+    "11200": 143,
+    "11240": 255,
+    "11280": 129,
+    "11320": 87,
+    "11360": 106,
+    "11400": 171,
+    "11440": 255,
+    "11480": 255,
+    "11520": 137,
+    "11560": 200,
+    "11600": 100,
+    "11640": 200,
+    "11680": 200,
+    "11720": 144,
+    "11760": 93,
+    "11800": 154,
+    "11840": 255,
+    "11880": 142,
+    "11920": 53,
+    "11960": 122,
+    "12000": 255,
+    "12040": 255,
+    "12080": 255,
+    "12120": 255,
+    "12160": 95,
+    "12200": 221,
+    "12240": 65,
+    "12280": 255,
+    "12320": 255,
+    "12360": 34,
+    "12400": 255,
+    "12440": 255,
+    "12480": 255,
+    "12520": 55,
+    "12560": 255,
+    "12600": 255,
+    "12640": 255,
+    "12680": 67,
+    "12720": 255,
+    "12760": 200,
+    "12800": 255,
+    "12840": 255,
+    "12880": 62,
+    "12920": 56,
+    "12960": 255,
+    "13000": 77,
+    "13040": 26,
+    "13080": 200,
+    "13120": 67,
+    "13160": 103,
+    "13200": 119,
+    "13240": 186,
+    "13280": 255,
+    "13320": 200,
+    "13360": 200,
+    "13400": 200,
+    "13440": 126,
+    "13480": 31,
+    "13520": 255,
+    "13560": 137,
+    "13600": 43,
+    "13640": 106,
+    "13680": 121,
+    "13720": 255,
+    "13760": 27,
+    "13800": 36,
+    "13840": 55,
+    "13880": 167,
+    "13920": 70,
+    "13960": 119,
+    "14000": 158,
+    "14040": 255,
+    "14080": 52,
+    "14120": 86,
+    "14160": 130,
+    "14200": 72,
+    "14240": 149,
+    "14280": 255,
+    "14320": 200,
+    "14360": 197,
+    "14400": 255,
+    "14440": 56,
+    "14480": 116,
+    "14520": 255,
+    "14560": 39,
+    "14600": 75,
+    "14640": 200,
+    "14680": 255,
+    "14720": 200,
+    "14760": 255,
+    "14800": 176,
+    "14840": 140,
+    "14880": 137,
+    "14920": 140,
+    "14960": 150,
+    "15000": 255,
+    "15040": 168,
+    "15080": 141,
+    "15120": 38,
+    "15160": 169,
+    "15200": 200,
+    "15240": 252,
+    "15280": 193,
+    "15320": 189,
+    "15360": 66,
+    "15400": 200,
+    "15440": 80,
+    "15480": 255,
+    "15520": 42,
+    "15560": 233,
+    "15600": 39,
+    "15640": 255,
+    "15680": 223,
+    "15720": 255,
+    "15760": 247,
+    "15800": 66,
+    "15840": 125,
+    "15880": 159,
+    "15920": 200,
+    "15960": 200,
+    "16000": 200,
+    "16040": 200,
+    "16080": 200,
+    "16120": 193,
+    "16160": 200,
+    "16200": 107,
+    "16240": 128,
+    "16280": 200,
+    "16320": 119,
+    "16360": 203,
+    "16400": 196,
+    "16440": 149,
+    "16480": 255,
+    "16520": 64,
+    "16560": 200,
+    "16600": 255,
+    "16640": 255,
+    "16680": 48,
+    "16720": 58,
+    "16760": 255,
+    "16800": 38,
+    "16840": 255,
+    "16880": 33,
+    "16920": 255,
+    "16960": 199,
+    "17000": 254,
+    "17040": 255,
+    "17080": 200,
+    "17120": 152,
+    "17160": 255,
+    "17200": 255,
+    "17240": 255,
+    "17280": 255,
+    "17320": 255,
+    "17360": 223,
+    "17400": 255,
+    "17440": 39,
+    "17480": 255,
+    "17520": 201,
+    "17560": 191,
+    "17600": 255,
+    "17640": 199,
+    "17680": 238,
+    "17720": 233,
+    "17760": 126,
+    "17800": 98,
+    "17840": 51,
+    "17880": 116,
+    "17920": 147,
+    "17960": 202,
+    "18000": 255,
+    "18040": 34,
+    "18080": 255,
+    "18120": 255,
+    "18160": 255,
+    "18200": 255,
+    "18240": 255,
+    "18280": 255,
+    "18320": 255,
+    "18360": 255,
+    "18400": 32,
+    "18440": 255,
+    "18480": 255,
+    "18520": 255,
+    "18560": 255,
+    "18600": 255,
+    "18640": 255,
+    "18680": 255,
+    "18720": 255,
+    "18760": 255,
+    "18800": 255,
+    "18840": 255,
+    "18880": 255,
+    "18920": 255,
+    "18960": 255,
+    "19000": 247,
+    "19040": 255,
+    "19080": 57,
+    "19120": 255,
+    "19160": 255,
+    "19200": 52,
+    "19240": 255,
+    "19280": 56,
+    "19320": 242,
+    "19360": 98,
+    "19400": 241,
+    "19440": 233,
+    "19480": 96,
+    "19520": 202,
+    "19560": 60,
+    "19600": 230,
+    "19640": 255,
+    "19680": 215,
+    "19720": 191,
+    "19760": 229,
+    "19800": 255,
+    "19840": 255,
+    "19880": 255,
+    "19920": 255,
+    "19960": 255,
+    "20000": 255,
+    "20040": 239,
+    "20080": 245,
+    "20120": 255,
+    "20160": 246,
+    "20200": 255,
+    "20240": 255,
+    "20280": 255,
+    "20320": 251,
+    "20360": 255,
+    "20400": 251,
+    "20440": 69,
+    "20480": 241,
+    "20520": 40,
+    "20560": 233,
+    "20600": 242,
+    "20640": 30,
+    "20680": 250,
+    "20720": 236,
+    "20760": 255,
+    "20800": 238,
+    "20840": 214,
+    "20880": 218,
+    "20920": 211,
+    "20960": 194,
+    "21000": 231,
+    "21040": 240,
+    "21080": 226,
+    "21120": 213,
+    "21160": 232,
+    "21200": 168,
+    "21240": 217,
+    "21280": 60,
+    "21320": 198,
+    "21360": 164,
+    "21400": 59,
+    "21440": 188,
+    "21480": 164,
+    "21520": 164,
+    "21560": 183,
+    "21600": 182,
+    "21640": 226,
+    "21680": 174,
+    "21720": 192,
+    "21760": 33,
+    "21800": 194,
+    "21840": 170,
+    "21880": 66,
+    "21920": 158,
+    "21960": 158,
+    "22000": 181,
+    "22040": 197,
+    "22080": 96,
+    "22120": 255,
+    "22160": 79,
+    "22200": 255,
+    "22240": 200,
+    "22280": 74,
+    "22320": 105,
+    "22360": 142,
+    "22400": 200
+  },
+  "events": [
+    {
+      "start_ms": 0,
+      "type": "thunder_visual",
+      "intensity": 255,
+      "max_lightning": 255.0,
+      "max_rain": 0.0,
+      "avg_audio": 0.0
+    },
+    {
+      "start_ms": 40,
+      "type": "none",
+      "intensity": 0,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 0.0
+    },
+    {
+      "start_ms": 80,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.36688899739586844,
+      "max_rain": 200.0,
+      "avg_audio": 0.039545283289044164
+    },
+    {
+      "start_ms": 120,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 204.3128326535225
+    },
+    {
+      "start_ms": 160,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 176.8046799302101
+    },
+    {
+      "start_ms": 200,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 196.71906173229218
+    },
+    {
+      "start_ms": 240,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 183.36188167333603
+    },
+    {
+      "start_ms": 280,
+      "type": "audio",
+      "intensity": 192,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 192.38094091415405
+    },
+    {
+      "start_ms": 320,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 182.9070308804512
+    },
+    {
+      "start_ms": 360,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 186.45988583564758
+    },
+    {
+      "start_ms": 400,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 1.5978173828125675,
+      "max_rain": 200.0,
+      "avg_audio": 200.53965032100677
+    },
+    {
+      "start_ms": 440,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 8.864337890624961,
+      "max_rain": 200.0,
+      "avg_audio": 147.66547232866287
+    },
+    {
+      "start_ms": 480,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 4.006847981770857,
+      "max_rain": 200.0,
+      "avg_audio": 215.75880646705627
+    },
+    {
+      "start_ms": 520,
+      "type": "audio",
+      "intensity": 213,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 213.9802435040474
+    },
+    {
+      "start_ms": 560,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 22.644398437499994,
+      "max_rain": 200.0,
+      "avg_audio": 166.62113517522812
+    },
+    {
+      "start_ms": 600,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 14.37511588541663,
+      "max_rain": 200.0,
+      "avg_audio": 192.96121537685394
+    },
+    {
+      "start_ms": 640,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 7.634754231770855,
+      "max_rain": 200.0,
+      "avg_audio": 225.41519790887833
+    },
+    {
+      "start_ms": 680,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 7.0451276041666695,
+      "max_rain": 200.0,
+      "avg_audio": 207.7664217352867
+    },
+    {
+      "start_ms": 720,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 189.56173539161682
+    },
+    {
+      "start_ms": 760,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 207.26121604442596
+    },
+    {
+      "start_ms": 800,
+      "type": "audio",
+      "intensity": 184,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 184.7217983007431
+    },
+    {
+      "start_ms": 840,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 197.7751922607422
+    },
+    {
+      "start_ms": 880,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 9.631734049479126,
+      "max_rain": 200.0,
+      "avg_audio": 217.7674698829651
+    },
+    {
+      "start_ms": 920,
+      "type": "rain",
+      "intensity": 191,
+      "max_lightning": 11.073114908854176,
+      "max_rain": 191.40625,
+      "avg_audio": 187.98497200012207
+    },
+    {
+      "start_ms": 960,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 5.009261393229149,
+      "max_rain": 200.0,
+      "avg_audio": 185.7523638010025
+    },
+    {
+      "start_ms": 1000,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 3.189132486979197,
+      "max_rain": 200.0,
+      "avg_audio": 192.28197902441025
+    },
+    {
+      "start_ms": 1040,
+      "type": "audio",
+      "intensity": 220,
+      "max_lightning": 0.001328124999980673,
+      "max_rain": 0.0,
+      "avg_audio": 220.84332883358002
+    },
+    {
+      "start_ms": 1080,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 1.014659830729168,
+      "max_rain": 200.0,
+      "avg_audio": 199.7414195537567
+    },
+    {
+      "start_ms": 1120,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.3057675781250367,
+      "max_rain": 200.0,
+      "avg_audio": 168.59189182519913
+    },
+    {
+      "start_ms": 1160,
+      "type": "rain",
+      "intensity": 184,
+      "max_lightning": 3.050415364583284,
+      "max_rain": 184.5775462962963,
+      "avg_audio": 197.40685522556305
+    },
+    {
+      "start_ms": 1200,
+      "type": "rain",
+      "intensity": 157,
+      "max_lightning": 1.183768880208349,
+      "max_rain": 157.6388888888889,
+      "avg_audio": 213.49031299352646
+    },
+    {
+      "start_ms": 1240,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 8.93564160156253,
+      "max_rain": 200.0,
+      "avg_audio": 191.43915385007858
+    },
+    {
+      "start_ms": 1280,
+      "type": "audio",
+      "intensity": 219,
+      "max_lightning": 0.002097330729074542,
+      "max_rain": 0.0,
+      "avg_audio": 219.43737387657166
+    },
+    {
+      "start_ms": 1320,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 26.814008138020892,
+      "max_rain": 200.0,
+      "avg_audio": 210.14495730400085
+    },
+    {
+      "start_ms": 1360,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 197.30643421411514
+    },
+    {
+      "start_ms": 1400,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 234.64479625225067
+    },
+    {
+      "start_ms": 1440,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 213.78140777349472
+    },
+    {
+      "start_ms": 1480,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 185.1930946111679
+    },
+    {
+      "start_ms": 1520,
+      "type": "audio",
+      "intensity": 227,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 227.203868329525
+    },
+    {
+      "start_ms": 1560,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 216.53733909130096
+    },
+    {
+      "start_ms": 1600,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 10.412422526041698,
+      "max_rain": 200.0,
+      "avg_audio": 205.22908508777618
+    },
+    {
+      "start_ms": 1640,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 215.78689455986023
+    },
+    {
+      "start_ms": 1680,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 6.774599609375019,
+      "max_rain": 200.0,
+      "avg_audio": 212.02427566051483
+    },
+    {
+      "start_ms": 1720,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 176.46949231624603
+    },
+    {
+      "start_ms": 1760,
+      "type": "audio",
+      "intensity": 216,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 216.6926747560501
+    },
+    {
+      "start_ms": 1800,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 205.5202254652977
+    },
+    {
+      "start_ms": 1840,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 210.3870803117752
+    },
+    {
+      "start_ms": 1880,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 245.0678649544716
+    },
+    {
+      "start_ms": 1920,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 1960,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2000,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.004283203125002899,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2040,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0021194661458423525,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2080,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 251.9269073009491
+    },
+    {
+      "start_ms": 2120,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2160,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2200,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2240,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 1.3795677083333047,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2280,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0008134765625207762,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2320,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2360,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 249.83948171138763
+    },
+    {
+      "start_ms": 2400,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2440,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 4.552513671875001,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2480,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 238.1011363863945
+    },
+    {
+      "start_ms": 2520,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.006646158854167794,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2560,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 23.91025097656248,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2600,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.8652070312500058,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2640,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2680,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2720,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 1.5003662109375,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2760,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.05427604166665958,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2800,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2840,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2880,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2920,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.15886035156250386,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 2960,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 3.2808395182291816,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3000,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0017763671874995166,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3040,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3080,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 8.878615234375008,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3120,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 2.6277561848958504,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3160,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3200,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3240,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.01986653645833414,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3280,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 11.509044270833359,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3320,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3360,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3400,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3440,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 3.3395039062499836,
+      "max_rain": 200.0,
+      "avg_audio": 252.51161992549896
+    },
+    {
+      "start_ms": 3480,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3520,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 1.249345052083337,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3560,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3600,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3640,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3680,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 9.40815527343751,
+      "max_rain": 200.0,
+      "avg_audio": 241.6161149740219
+    },
+    {
+      "start_ms": 3720,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3760,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 10.994927083333346,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3800,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 10.929162760416666,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3840,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3880,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3920,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 3960,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 4000,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.14464941406250773,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 4040,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 4080,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.5289645182291842,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 4120,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 4160,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 6.107908528645824,
+      "max_rain": 200.0,
+      "avg_audio": 238.82902532815933
+    },
+    {
+      "start_ms": 4200,
+      "type": "audio",
+      "intensity": 239,
+      "max_lightning": 0.007680989583315778,
+      "max_rain": 0.0,
+      "avg_audio": 239.58212971687317
+    },
+    {
+      "start_ms": 4240,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 232.2915217280388
+    },
+    {
+      "start_ms": 4280,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 4320,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 4.3398310546875125,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 4360,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 234.06096518039703
+    },
+    {
+      "start_ms": 4400,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 6.42459993489584,
+      "max_rain": 200.0,
+      "avg_audio": 238.83317470550537
+    },
+    {
+      "start_ms": 4440,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.001566080729147501,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 4480,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 11.828225911458338,
+      "max_rain": 200.0,
+      "avg_audio": 247.2133058309555
+    },
+    {
+      "start_ms": 4520,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 4.6429036458333535,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 4560,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 29.074360677083305,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 4600,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 238.2144159078598
+    },
+    {
+      "start_ms": 4640,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 4680,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 4720,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 244.89283114671707
+    },
+    {
+      "start_ms": 4760,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 2.2615367838541642,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 4800,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 18.53469824218751,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 4840,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 30.03260286458331,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 4880,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 16.0165289713542,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 4920,
+      "type": "thunder_both",
+      "intensity": 255,
+      "max_lightning": 255.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 4960,
+      "type": "rain",
+      "intensity": 168,
+      "max_lightning": 0.5135361328125029,
+      "max_rain": 168.83680555555557,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 5000,
+      "type": "rain",
+      "intensity": 155,
+      "max_lightning": 0.07757910156254155,
+      "max_rain": 155.90277777777777,
+      "avg_audio": 204.93408411741257
+    },
+    {
+      "start_ms": 5040,
+      "type": "rain",
+      "intensity": 138,
+      "max_lightning": 1.684018229166672,
+      "max_rain": 138.62847222222223,
+      "avg_audio": 142.2617670893669
+    },
+    {
+      "start_ms": 5080,
+      "type": "audio",
+      "intensity": 112,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 112.14765340089798
+    },
+    {
+      "start_ms": 5120,
+      "type": "rain",
+      "intensity": 176,
+      "max_lightning": 1.038610351562501,
+      "max_rain": 176.44675925925927,
+      "avg_audio": 100.60158535838127
+    },
+    {
+      "start_ms": 5160,
+      "type": "rain",
+      "intensity": 182,
+      "max_lightning": 2.7285442708333005,
+      "max_rain": 182.52314814814815,
+      "avg_audio": 150.40807396173477
+    },
+    {
+      "start_ms": 5200,
+      "type": "rain",
+      "intensity": 162,
+      "max_lightning": 1.194698242187556,
+      "max_rain": 162.81828703703707,
+      "avg_audio": 141.16845935583115
+    },
+    {
+      "start_ms": 5240,
+      "type": "rain",
+      "intensity": 194,
+      "max_lightning": 1.6412415364582726,
+      "max_rain": 194.70486111111111,
+      "avg_audio": 154.0475034713745
+    },
+    {
+      "start_ms": 5280,
+      "type": "rain",
+      "intensity": 192,
+      "max_lightning": 0.0,
+      "max_rain": 192.1585648148148,
+      "avg_audio": 141.36069864034653
+    },
+    {
+      "start_ms": 5320,
+      "type": "audio",
+      "intensity": 120,
+      "max_lightning": 0.0,
+      "max_rain": 0.11574074074074074,
+      "avg_audio": 120.35709768533707
+    },
+    {
+      "start_ms": 5360,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 99.7008664906025
+    },
+    {
+      "start_ms": 5400,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 130.42461186647415
+    },
+    {
+      "start_ms": 5440,
+      "type": "rain",
+      "intensity": 193,
+      "max_lightning": 0.0,
+      "max_rain": 193.72106481481484,
+      "avg_audio": 120.80290496349335
+    },
+    {
+      "start_ms": 5480,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 8.36827766927085,
+      "max_rain": 200.0,
+      "avg_audio": 114.9990051984787
+    },
+    {
+      "start_ms": 5520,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 8.276028320312518,
+      "max_rain": 200.0,
+      "avg_audio": 123.88231292366982
+    },
+    {
+      "start_ms": 5560,
+      "type": "audio",
+      "intensity": 113,
+      "max_lightning": 0.10624446614582012,
+      "max_rain": 0.0,
+      "avg_audio": 113.25992971658707
+    },
+    {
+      "start_ms": 5600,
+      "type": "rain",
+      "intensity": 192,
+      "max_lightning": 0.4646445312500077,
+      "max_rain": 192.7372685185185,
+      "avg_audio": 145.62967836856842
+    },
+    {
+      "start_ms": 5640,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 4.8182936197916275,
+      "max_rain": 200.0,
+      "avg_audio": 166.7377433180809
+    },
+    {
+      "start_ms": 5680,
+      "type": "rain",
+      "intensity": 188,
+      "max_lightning": 0.0,
+      "max_rain": 188.04976851851853,
+      "avg_audio": 159.6806252002716
+    },
+    {
+      "start_ms": 5720,
+      "type": "rain",
+      "intensity": 197,
+      "max_lightning": 1.6560445963541623,
+      "max_rain": 197.25115740740742,
+      "avg_audio": 133.2457932829857
+    },
+    {
+      "start_ms": 5760,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 2.757929036458344,
+      "max_rain": 200.0,
+      "avg_audio": 115.49990952014923
+    },
+    {
+      "start_ms": 5800,
+      "type": "audio",
+      "intensity": 124,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 124.92104798555374
+    },
+    {
+      "start_ms": 5840,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 143.41909378767014
+    },
+    {
+      "start_ms": 5880,
+      "type": "rain",
+      "intensity": 172,
+      "max_lightning": 0.0,
+      "max_rain": 172.56944444444446,
+      "avg_audio": 164.30064529180527
+    },
+    {
+      "start_ms": 5920,
+      "type": "rain",
+      "intensity": 129,
+      "max_lightning": 0.0,
+      "max_rain": 129.1087962962963,
+      "avg_audio": 178.0470460653305
+    },
+    {
+      "start_ms": 5960,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 177.99808949232101
+    },
+    {
+      "start_ms": 6000,
+      "type": "rain",
+      "intensity": 174,
+      "max_lightning": 0.0,
+      "max_rain": 174.21875000000003,
+      "avg_audio": 128.56439888477325
+    },
+    {
+      "start_ms": 6040,
+      "type": "audio",
+      "intensity": 118,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 118.13778877258301
+    },
+    {
+      "start_ms": 6080,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 105.12768968939781
+    },
+    {
+      "start_ms": 6120,
+      "type": "rain",
+      "intensity": 132,
+      "max_lightning": 0.7905332031250125,
+      "max_rain": 132.6388888888889,
+      "avg_audio": 138.6065000295639
+    },
+    {
+      "start_ms": 6160,
+      "type": "rain",
+      "intensity": 134,
+      "max_lightning": 3.720614908854196,
+      "max_rain": 134.49074074074073,
+      "avg_audio": 136.7921581864357
+    },
+    {
+      "start_ms": 6200,
+      "type": "rain",
+      "intensity": 108,
+      "max_lightning": 0.8873701171874913,
+      "max_rain": 108.50694444444446,
+      "avg_audio": 162.18108862638474
+    },
+    {
+      "start_ms": 6240,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 8.462021158854123,
+      "max_rain": 200.0,
+      "avg_audio": 165.28654038906097
+    },
+    {
+      "start_ms": 6280,
+      "type": "audio",
+      "intensity": 183,
+      "max_lightning": 0.1172014973958781,
+      "max_rain": 0.0,
+      "avg_audio": 183.8448965549469
+    },
+    {
+      "start_ms": 6320,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 10.328269205729121,
+      "max_rain": 200.0,
+      "avg_audio": 188.94920825958252
+    },
+    {
+      "start_ms": 6360,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 4.763751953125059,
+      "max_rain": 200.0,
+      "avg_audio": 188.37125927209854
+    },
+    {
+      "start_ms": 6400,
+      "type": "rain",
+      "intensity": 173,
+      "max_lightning": 1.5333369140624766,
+      "max_rain": 173.4085648148148,
+      "avg_audio": 176.0108569264412
+    },
+    {
+      "start_ms": 6440,
+      "type": "rain",
+      "intensity": 169,
+      "max_lightning": 0.0,
+      "max_rain": 169.96527777777777,
+      "avg_audio": 170.80113887786865
+    },
+    {
+      "start_ms": 6480,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 168.28112930059433
+    },
+    {
+      "start_ms": 6520,
+      "type": "audio",
+      "intensity": 184,
+      "max_lightning": 0.0,
+      "max_rain": 0.028935185185185185,
+      "avg_audio": 184.66800838708878
+    },
+    {
+      "start_ms": 6560,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 182.99511015415192
+    },
+    {
+      "start_ms": 6600,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 152.6627665758133
+    },
+    {
+      "start_ms": 6640,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 12.656732421874986,
+      "max_rain": 200.0,
+      "avg_audio": 177.10194557905197
+    },
+    {
+      "start_ms": 6680,
+      "type": "rain",
+      "intensity": 193,
+      "max_lightning": 4.923049479166661,
+      "max_rain": 193.83680555555557,
+      "avg_audio": 164.59563106298447
+    },
+    {
+      "start_ms": 6720,
+      "type": "rain",
+      "intensity": 153,
+      "max_lightning": 3.7784326171875433,
+      "max_rain": 153.53009259259258,
+      "avg_audio": 133.95392328500748
+    },
+    {
+      "start_ms": 6760,
+      "type": "audio",
+      "intensity": 144,
+      "max_lightning": 0.20132161458323025,
+      "max_rain": 0.028935185185185185,
+      "avg_audio": 144.30751651525497
+    },
+    {
+      "start_ms": 6800,
+      "type": "rain",
+      "intensity": 174,
+      "max_lightning": 7.365421549479231,
+      "max_rain": 174.4212962962963,
+      "avg_audio": 143.160859644413
+    },
+    {
+      "start_ms": 6840,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 18.68183235677079,
+      "max_rain": 200.0,
+      "avg_audio": 117.14945420622826
+    },
+    {
+      "start_ms": 6880,
+      "type": "rain",
+      "intensity": 183,
+      "max_lightning": 9.878488606770935,
+      "max_rain": 183.33333333333334,
+      "avg_audio": 119.21267509460449
+    },
+    {
+      "start_ms": 6920,
+      "type": "rain",
+      "intensity": 174,
+      "max_lightning": 3.353615234374996,
+      "max_rain": 174.21875000000003,
+      "avg_audio": 160.35519540309906
+    },
+    {
+      "start_ms": 6960,
+      "type": "rain",
+      "intensity": 169,
+      "max_lightning": 9.28037858072915,
+      "max_rain": 169.7627314814815,
+      "avg_audio": 110.52536845207214
+    },
+    {
+      "start_ms": 7000,
+      "type": "audio",
+      "intensity": 135,
+      "max_lightning": 0.2228815104166557,
+      "max_rain": 0.0,
+      "avg_audio": 135.92737019062042
+    },
+    {
+      "start_ms": 7040,
+      "type": "rain",
+      "intensity": 169,
+      "max_lightning": 12.253419596354163,
+      "max_rain": 169.09722222222223,
+      "avg_audio": 141.4554351568222
+    },
+    {
+      "start_ms": 7080,
+      "type": "rain",
+      "intensity": 161,
+      "max_lightning": 10.613318033854142,
+      "max_rain": 161.54513888888889,
+      "avg_audio": 130.1881581544876
+    },
+    {
+      "start_ms": 7120,
+      "type": "rain",
+      "intensity": 90,
+      "max_lightning": 0.0,
+      "max_rain": 90.88541666666667,
+      "avg_audio": 160.02938568592072
+    },
+    {
+      "start_ms": 7160,
+      "type": "rain",
+      "intensity": 95,
+      "max_lightning": 0.0,
+      "max_rain": 95.19675925925927,
+      "avg_audio": 129.07718896865845
+    },
+    {
+      "start_ms": 7200,
+      "type": "rain",
+      "intensity": 126,
+      "max_lightning": 0.0,
+      "max_rain": 126.12847222222224,
+      "avg_audio": 151.84351533651352
+    },
+    {
+      "start_ms": 7240,
+      "type": "audio",
+      "intensity": 162,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 162.11644649505615
+    },
+    {
+      "start_ms": 7280,
+      "type": "rain",
+      "intensity": 143,
+      "max_lightning": 0.0,
+      "max_rain": 143.2002314814815,
+      "avg_audio": 152.63297617435455
+    },
+    {
+      "start_ms": 7320,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 120.19622951745987
+    },
+    {
+      "start_ms": 7360,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 120.81697940826416
+    },
+    {
+      "start_ms": 7400,
+      "type": "rain",
+      "intensity": 63,
+      "max_lightning": 4.169515624999958,
+      "max_rain": 63.715277777777786,
+      "avg_audio": 127.88554251194
+    },
+    {
+      "start_ms": 7440,
+      "type": "rain",
+      "intensity": 53,
+      "max_lightning": 0.0,
+      "max_rain": 53.06712962962963,
+      "avg_audio": 131.4222863316536
+    },
+    {
+      "start_ms": 7480,
+      "type": "audio",
+      "intensity": 140,
+      "max_lightning": 0.05254394531251449,
+      "max_rain": 0.8969907407407408,
+      "avg_audio": 140.65171748399734
+    },
+    {
+      "start_ms": 7520,
+      "type": "rain",
+      "intensity": 89,
+      "max_lightning": 0.0,
+      "max_rain": 89.09143518518519,
+      "avg_audio": 141.75399273633957
+    },
+    {
+      "start_ms": 7560,
+      "type": "rain",
+      "intensity": 137,
+      "max_lightning": 1.6653525390625559,
+      "max_rain": 137.78935185185188,
+      "avg_audio": 125.59552699327469
+    },
+    {
+      "start_ms": 7600,
+      "type": "rain",
+      "intensity": 160,
+      "max_lightning": 8.792198567708287,
+      "max_rain": 160.12731481481484,
+      "avg_audio": 98.82429912686348
+    },
+    {
+      "start_ms": 7640,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 19.007145507812513,
+      "max_rain": 200.0,
+      "avg_audio": 118.16481292247772
+    },
+    {
+      "start_ms": 7680,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 23.655267578124963,
+      "max_rain": 200.0,
+      "avg_audio": 135.4274234175682
+    },
+    {
+      "start_ms": 7720,
+      "type": "audio",
+      "intensity": 162,
+      "max_lightning": 0.5635566406250105,
+      "max_rain": 0.607638888888889,
+      "avg_audio": 162.11574733257294
+    },
+    {
+      "start_ms": 7760,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 19.51445052083336,
+      "max_rain": 200.0,
+      "avg_audio": 159.72181499004364
+    },
+    {
+      "start_ms": 7800,
+      "type": "rain",
+      "intensity": 131,
+      "max_lightning": 9.07045182291668,
+      "max_rain": 131.42361111111111,
+      "avg_audio": 99.16919901967049
+    },
+    {
+      "start_ms": 7840,
+      "type": "rain",
+      "intensity": 91,
+      "max_lightning": 2.8361722005208034,
+      "max_rain": 91.6087962962963,
+      "avg_audio": 133.70582699775696
+    },
+    {
+      "start_ms": 7880,
+      "type": "rain",
+      "intensity": 106,
+      "max_lightning": 0.0,
+      "max_rain": 106.42361111111113,
+      "avg_audio": 132.36449897289276
+    },
+    {
+      "start_ms": 7920,
+      "type": "rain",
+      "intensity": 120,
+      "max_lightning": 0.0,
+      "max_rain": 120.86226851851852,
+      "avg_audio": 141.74437165260315
+    },
+    {
+      "start_ms": 7960,
+      "type": "audio",
+      "intensity": 127,
+      "max_lightning": 0.018499674479154748,
+      "max_rain": 0.0,
+      "avg_audio": 127.80589878559113
+    },
+    {
+      "start_ms": 8000,
+      "type": "rain",
+      "intensity": 91,
+      "max_lightning": 0.8140742187500251,
+      "max_rain": 91.29050925925927,
+      "avg_audio": 138.23855817317963
+    },
+    {
+      "start_ms": 8040,
+      "type": "rain",
+      "intensity": 151,
+      "max_lightning": 6.782518554687502,
+      "max_rain": 151.9675925925926,
+      "avg_audio": 128.61473858356476
+    },
+    {
+      "start_ms": 8080,
+      "type": "rain",
+      "intensity": 61,
+      "max_lightning": 0.0,
+      "max_rain": 61.74768518518518,
+      "avg_audio": 135.04983007907867
+    },
+    {
+      "start_ms": 8120,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 178.1084507703781
+    },
+    {
+      "start_ms": 8160,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 145.68590015172958
+    },
+    {
+      "start_ms": 8200,
+      "type": "audio",
+      "intensity": 186,
+      "max_lightning": 0.08970930989578534,
+      "max_rain": 0.0,
+      "avg_audio": 186.67841970920563
+    },
+    {
+      "start_ms": 8240,
+      "type": "rain",
+      "intensity": 180,
+      "max_lightning": 0.0,
+      "max_rain": 180.72916666666669,
+      "avg_audio": 151.86069041490555
+    },
+    {
+      "start_ms": 8280,
+      "type": "rain",
+      "intensity": 65,
+      "max_lightning": 0.0,
+      "max_rain": 65.91435185185185,
+      "avg_audio": 149.2296203970909
+    },
+    {
+      "start_ms": 8320,
+      "type": "rain",
+      "intensity": 159,
+      "max_lightning": 0.0,
+      "max_rain": 159.08564814814815,
+      "avg_audio": 134.39030706882477
+    },
+    {
+      "start_ms": 8360,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 129.3151929974556
+    },
+    {
+      "start_ms": 8400,
+      "type": "rain",
+      "intensity": 163,
+      "max_lightning": 0.0,
+      "max_rain": 163.57060185185188,
+      "avg_audio": 151.12971603870392
+    },
+    {
+      "start_ms": 8440,
+      "type": "audio",
+      "intensity": 152,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 152.306649684906
+    },
+    {
+      "start_ms": 8480,
+      "type": "rain",
+      "intensity": 174,
+      "max_lightning": 2.746307942708368,
+      "max_rain": 174.94212962962965,
+      "avg_audio": 131.83017164468765
+    },
+    {
+      "start_ms": 8520,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 18.50834049479166,
+      "max_rain": 200.0,
+      "avg_audio": 106.79178759455681
+    },
+    {
+      "start_ms": 8560,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 27.38660156250001,
+      "max_rain": 200.0,
+      "avg_audio": 142.3175784945488
+    },
+    {
+      "start_ms": 8600,
+      "type": "rain",
+      "intensity": 184,
+      "max_lightning": 7.93846874999999,
+      "max_rain": 184.28819444444446,
+      "avg_audio": 151.61946415901184
+    },
+    {
+      "start_ms": 8640,
+      "type": "rain",
+      "intensity": 68,
+      "max_lightning": 0.0,
+      "max_rain": 68.80787037037038,
+      "avg_audio": 119.18059721589088
+    },
+    {
+      "start_ms": 8680,
+      "type": "audio",
+      "intensity": 144,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 144.05168384313583
+    },
+    {
+      "start_ms": 8720,
+      "type": "rain",
+      "intensity": 127,
+      "max_lightning": 0.0,
+      "max_rain": 127.05439814814815,
+      "avg_audio": 139.26298320293427
+    },
+    {
+      "start_ms": 8760,
+      "type": "rain",
+      "intensity": 108,
+      "max_lightning": 0.49057617187499997,
+      "max_rain": 108.68055555555554,
+      "avg_audio": 155.14977872371674
+    },
+    {
+      "start_ms": 8800,
+      "type": "rain",
+      "intensity": 150,
+      "max_lightning": 6.5889775390624985,
+      "max_rain": 150.0289351851852,
+      "avg_audio": 104.92422580718994
+    },
+    {
+      "start_ms": 8840,
+      "type": "rain",
+      "intensity": 89,
+      "max_lightning": 6.448827148437501,
+      "max_rain": 89.20717592592592,
+      "avg_audio": 145.2243921160698
+    },
+    {
+      "start_ms": 8880,
+      "type": "rain",
+      "intensity": 52,
+      "max_lightning": 0.7981256510416557,
+      "max_rain": 52.517361111111114,
+      "avg_audio": 130.63119918107986
+    },
+    {
+      "start_ms": 8920,
+      "type": "audio",
+      "intensity": 129,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 129.69143360853195
+    },
+    {
+      "start_ms": 8960,
+      "type": "rain",
+      "intensity": 63,
+      "max_lightning": 0.0,
+      "max_rain": 63.715277777777786,
+      "avg_audio": 139.98395651578903
+    },
+    {
+      "start_ms": 9000,
+      "type": "rain",
+      "intensity": 49,
+      "max_lightning": 1.3593470052083887,
+      "max_rain": 49.45023148148148,
+      "avg_audio": 139.51206743717194
+    },
+    {
+      "start_ms": 9040,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 112.3393303155899
+    },
+    {
+      "start_ms": 9080,
+      "type": "audio",
+      "intensity": 142,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 142.67009317874908
+    },
+    {
+      "start_ms": 9120,
+      "type": "rain",
+      "intensity": 133,
+      "max_lightning": 1.0839990234375434,
+      "max_rain": 133.0439814814815,
+      "avg_audio": 206.17737740278244
+    },
+    {
+      "start_ms": 9160,
+      "type": "rain",
+      "intensity": 91,
+      "max_lightning": 1.9556474609374843,
+      "max_rain": 91.26157407407408,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 9200,
+      "type": "rain",
+      "intensity": 86,
+      "max_lightning": 0.704343424479147,
+      "max_rain": 86.54513888888889,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 9240,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 3.6664606119791796,
+      "max_rain": 200.0,
+      "avg_audio": 248.28858733177185
+    },
+    {
+      "start_ms": 9280,
+      "type": "rain",
+      "intensity": 166,
+      "max_lightning": 3.5799222005208517,
+      "max_rain": 166.26157407407408,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 9320,
+      "type": "audio",
+      "intensity": 246,
+      "max_lightning": 0.08469010416662286,
+      "max_rain": 0.028935185185185185,
+      "avg_audio": 246.2878730893135
+    },
+    {
+      "start_ms": 9360,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 249.45901572704315
+    },
+    {
+      "start_ms": 9400,
+      "type": "rain",
+      "intensity": 111,
+      "max_lightning": 0.0,
+      "max_rain": 111.97916666666667,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 9440,
+      "type": "rain",
+      "intensity": 102,
+      "max_lightning": 2.28062858072914,
+      "max_rain": 102.71990740740742,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 9480,
+      "type": "rain",
+      "intensity": 196,
+      "max_lightning": 5.356671223958345,
+      "max_rain": 196.7013888888889,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 9520,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 4.967475260416652,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 9560,
+      "type": "audio",
+      "intensity": 234,
+      "max_lightning": 0.02415527343752899,
+      "max_rain": 0.0,
+      "avg_audio": 234.97919350862503
+    },
+    {
+      "start_ms": 9600,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 5.842255859374961,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 9640,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 4.821519856770859,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 9680,
+      "type": "rain",
+      "intensity": 119,
+      "max_lightning": 2.5542555338541515,
+      "max_rain": 119.9363425925926,
+      "avg_audio": 247.35772848129272
+    },
+    {
+      "start_ms": 9720,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0391022135416847,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 9760,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 2.000123046875022,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 9800,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.006956054687503865,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 9840,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 9880,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 9920,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 9960,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 10000,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 10040,
+      "type": "audio",
+      "intensity": 245,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 245.25750517845154
+    },
+    {
+      "start_ms": 10080,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 251.8926179409027
+    },
+    {
+      "start_ms": 10120,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 10160,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 10200,
+      "type": "rain",
+      "intensity": 158,
+      "max_lightning": 0.0,
+      "max_rain": 158.88310185185185,
+      "avg_audio": 237.9956692457199
+    },
+    {
+      "start_ms": 10240,
+      "type": "rain",
+      "intensity": 107,
+      "max_lightning": 0.0,
+      "max_rain": 107.34953703703702,
+      "avg_audio": 242.45041340589523
+    },
+    {
+      "start_ms": 10280,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.04950032552081964,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 10320,
+      "type": "rain",
+      "intensity": 110,
+      "max_lightning": 0.0,
+      "max_rain": 110.79282407407408,
+      "avg_audio": 240.68186670541763
+    },
+    {
+      "start_ms": 10360,
+      "type": "rain",
+      "intensity": 76,
+      "max_lightning": 1.8679746093750065,
+      "max_rain": 76.1863425925926,
+      "avg_audio": 252.1145260334015
+    },
+    {
+      "start_ms": 10400,
+      "type": "rain",
+      "intensity": 73,
+      "max_lightning": 2.0278089192708184,
+      "max_rain": 73.95833333333333,
+      "avg_audio": 224.85912054777145
+    },
+    {
+      "start_ms": 10440,
+      "type": "rain",
+      "intensity": 170,
+      "max_lightning": 2.7781497395833323,
+      "max_rain": 170.54398148148147,
+      "avg_audio": 249.40162360668182
+    },
+    {
+      "start_ms": 10480,
+      "type": "rain",
+      "intensity": 127,
+      "max_lightning": 1.7330537109375057,
+      "max_rain": 127.95138888888889,
+      "avg_audio": 211.67665511369705
+    },
+    {
+      "start_ms": 10520,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 10560,
+      "type": "rain",
+      "intensity": 169,
+      "max_lightning": 2.2598378906250076,
+      "max_rain": 169.44444444444446,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 10600,
+      "type": "rain",
+      "intensity": 55,
+      "max_lightning": 1.364360677083323,
+      "max_rain": 55.41087962962963,
+      "avg_audio": 232.68235355615616
+    },
+    {
+      "start_ms": 10640,
+      "type": "rain",
+      "intensity": 126,
+      "max_lightning": 3.024129557291674,
+      "max_rain": 126.7361111111111,
+      "avg_audio": 231.84668719768524
+    },
+    {
+      "start_ms": 10680,
+      "type": "rain",
+      "intensity": 142,
+      "max_lightning": 1.8780794270833268,
+      "max_rain": 142.01388888888889,
+      "avg_audio": 254.44451540708542
+    },
+    {
+      "start_ms": 10720,
+      "type": "rain",
+      "intensity": 160,
+      "max_lightning": 1.799498697916644,
+      "max_rain": 160.3587962962963,
+      "avg_audio": 247.83969461917877
+    },
+    {
+      "start_ms": 10760,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 10800,
+      "type": "rain",
+      "intensity": 95,
+      "max_lightning": 0.5549736328125014,
+      "max_rain": 95.83333333333334,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 10840,
+      "type": "rain",
+      "intensity": 119,
+      "max_lightning": 0.0,
+      "max_rain": 119.44444444444446,
+      "avg_audio": 195.36589354276657
+    },
+    {
+      "start_ms": 10880,
+      "type": "rain",
+      "intensity": 108,
+      "max_lightning": 0.0,
+      "max_rain": 108.94097222222223,
+      "avg_audio": 227.09332466125488
+    },
+    {
+      "start_ms": 10920,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 230.98471105098724
+    },
+    {
+      "start_ms": 10960,
+      "type": "rain",
+      "intensity": 144,
+      "max_lightning": 0.0,
+      "max_rain": 144.41550925925927,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 11000,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 11040,
+      "type": "rain",
+      "intensity": 96,
+      "max_lightning": 2.760906249999989,
+      "max_rain": 96.12268518518519,
+      "avg_audio": 228.27904343605042
+    },
+    {
+      "start_ms": 11080,
+      "type": "rain",
+      "intensity": 167,
+      "max_lightning": 1.28293001302083,
+      "max_rain": 167.1585648148148,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 11120,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.3811497395833385,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 11160,
+      "type": "rain",
+      "intensity": 156,
+      "max_lightning": 1.237098632812497,
+      "max_rain": 156.65509259259258,
+      "avg_audio": 237.29684114456177
+    },
+    {
+      "start_ms": 11200,
+      "type": "rain",
+      "intensity": 143,
+      "max_lightning": 0.0,
+      "max_rain": 143.25810185185188,
+      "avg_audio": 254.6196860074997
+    },
+    {
+      "start_ms": 11240,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.006878580729178906,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 11280,
+      "type": "rain",
+      "intensity": 129,
+      "max_lightning": 0.0,
+      "max_rain": 129.19560185185185,
+      "avg_audio": 243.25420707464218
+    },
+    {
+      "start_ms": 11320,
+      "type": "rain",
+      "intensity": 87,
+      "max_lightning": 0.0,
+      "max_rain": 87.8761574074074,
+      "avg_audio": 233.49734902381897
+    },
+    {
+      "start_ms": 11360,
+      "type": "rain",
+      "intensity": 106,
+      "max_lightning": 0.0,
+      "max_rain": 106.97337962962963,
+      "avg_audio": 235.3622129559517
+    },
+    {
+      "start_ms": 11400,
+      "type": "rain",
+      "intensity": 171,
+      "max_lightning": 0.0,
+      "max_rain": 171.15162037037038,
+      "avg_audio": 200.6074234843254
+    },
+    {
+      "start_ms": 11440,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.016822916666639286,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 11480,
+      "type": "thunder_both",
+      "intensity": 255,
+      "max_lightning": 255.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 11520,
+      "type": "rain",
+      "intensity": 137,
+      "max_lightning": 0.0,
+      "max_rain": 137.4710648148148,
+      "avg_audio": 193.3069360256195
+    },
+    {
+      "start_ms": 11560,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 65.9298974275589
+    },
+    {
+      "start_ms": 11600,
+      "type": "audio",
+      "intensity": 100,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 100.29623374342918
+    },
+    {
+      "start_ms": 11640,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 1.2497434895833819,
+      "max_rain": 200.0,
+      "avg_audio": 131.88040494918823
+    },
+    {
+      "start_ms": 11680,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 17.868211914062478,
+      "max_rain": 200.0,
+      "avg_audio": 135.1186367869377
+    },
+    {
+      "start_ms": 11720,
+      "type": "rain",
+      "intensity": 144,
+      "max_lightning": 18.801374674479174,
+      "max_rain": 144.35763888888889,
+      "avg_audio": 164.8956933617592
+    },
+    {
+      "start_ms": 11760,
+      "type": "rain",
+      "intensity": 93,
+      "max_lightning": 12.126229492187505,
+      "max_rain": 93.80787037037038,
+      "avg_audio": 150.5115956068039
+    },
+    {
+      "start_ms": 11800,
+      "type": "rain",
+      "intensity": 154,
+      "max_lightning": 1.5612275390625057,
+      "max_rain": 154.5138888888889,
+      "avg_audio": 224.30615901947021
+    },
+    {
+      "start_ms": 11840,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.007022460937517394,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 11880,
+      "type": "rain",
+      "intensity": 142,
+      "max_lightning": 1.5676246744791227,
+      "max_rain": 142.3900462962963,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 11920,
+      "type": "rain",
+      "intensity": 53,
+      "max_lightning": 0.0,
+      "max_rain": 53.24074074074074,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 11960,
+      "type": "rain",
+      "intensity": 122,
+      "max_lightning": 0.0,
+      "max_rain": 122.39583333333334,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12000,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 28.73263888888889,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12040,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 1.6065276692708392,
+      "max_rain": 10.185185185185187,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12080,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.04894694010419726,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12120,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 1.9565218098958268,
+      "max_rain": 14.409722222222223,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12160,
+      "type": "rain",
+      "intensity": 95,
+      "max_lightning": 15.514492187499995,
+      "max_rain": 95.34143518518519,
+      "avg_audio": 227.8179305791855
+    },
+    {
+      "start_ms": 12200,
+      "type": "audio",
+      "intensity": 221,
+      "max_lightning": 1.5973414713541614,
+      "max_rain": 2.170138888888889,
+      "avg_audio": 221.59027755260468
+    },
+    {
+      "start_ms": 12240,
+      "type": "rain",
+      "intensity": 65,
+      "max_lightning": 3.939456705729135,
+      "max_rain": 65.56712962962963,
+      "avg_audio": 222.1228113770485
+    },
+    {
+      "start_ms": 12280,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 2.7759694010417046,
+      "max_rain": 18.315972222222225,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12320,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.041337890625014494,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12360,
+      "type": "rain",
+      "intensity": 34,
+      "max_lightning": 0.2314534505208172,
+      "max_rain": 34.51967592592593,
+      "avg_audio": 245.52087664604187
+    },
+    {
+      "start_ms": 12400,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 11.255787037037038,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12440,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 22.71412037037037,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12480,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 2.6909722222222223,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12520,
+      "type": "rain",
+      "intensity": 55,
+      "max_lightning": 9.58657779947913,
+      "max_rain": 55.78703703703704,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12560,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.13370898437498935,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12600,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 4.915423828125011,
+      "max_rain": 29.16666666666667,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12640,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 3.886060546875046,
+      "max_rain": 17.158564814814813,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12680,
+      "type": "rain",
+      "intensity": 67,
+      "max_lightning": 0.4081992187499594,
+      "max_rain": 67.62152777777779,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12720,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 18.02662037037037,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12760,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12800,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.30452799479165615,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12840,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.2604166666666667,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12880,
+      "type": "rain",
+      "intensity": 62,
+      "max_lightning": 17.596477539062487,
+      "max_rain": 62.03703703703704,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12920,
+      "type": "rain",
+      "intensity": 56,
+      "max_lightning": 10.975768880208356,
+      "max_rain": 56.018518518518526,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 12960,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 1.5335648148148149,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 13000,
+      "type": "rain",
+      "intensity": 77,
+      "max_lightning": 0.0,
+      "max_rain": 77.7488425925926,
+      "avg_audio": 37.22675442695618
+    },
+    {
+      "start_ms": 13040,
+      "type": "audio",
+      "intensity": 26,
+      "max_lightning": 0.009081054687501932,
+      "max_rain": 0.0,
+      "avg_audio": 26.82797022163868
+    },
+    {
+      "start_ms": 13080,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 41.925486328124975,
+      "max_rain": 200.0,
+      "avg_audio": 35.31020566821098
+    },
+    {
+      "start_ms": 13120,
+      "type": "rain",
+      "intensity": 67,
+      "max_lightning": 0.0,
+      "max_rain": 67.73726851851852,
+      "avg_audio": 33.944361358881
+    },
+    {
+      "start_ms": 13160,
+      "type": "rain",
+      "intensity": 103,
+      "max_lightning": 0.0,
+      "max_rain": 103.47222222222223,
+      "avg_audio": 32.91123479604721
+    },
+    {
+      "start_ms": 13200,
+      "type": "rain",
+      "intensity": 119,
+      "max_lightning": 0.0,
+      "max_rain": 119.58912037037038,
+      "avg_audio": 248.9984956383705
+    },
+    {
+      "start_ms": 13240,
+      "type": "rain",
+      "intensity": 186,
+      "max_lightning": 11.01268522135415,
+      "max_rain": 186.63194444444446,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 13280,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 13320,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 15.368603190104142,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 13360,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 16.8649296875,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 13400,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 23.041225585937493,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 13440,
+      "type": "rain",
+      "intensity": 126,
+      "max_lightning": 10.173752929687515,
+      "max_rain": 126.50462962962963,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 13480,
+      "type": "rain",
+      "intensity": 31,
+      "max_lightning": 1.502098307291645,
+      "max_rain": 31.221064814814817,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 13520,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.04532226562502899,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 13560,
+      "type": "rain",
+      "intensity": 137,
+      "max_lightning": 0.0,
+      "max_rain": 137.15277777777777,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 13600,
+      "type": "rain",
+      "intensity": 43,
+      "max_lightning": 0.0,
+      "max_rain": 43.83680555555556,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 13640,
+      "type": "rain",
+      "intensity": 106,
+      "max_lightning": 3.942622070312509,
+      "max_rain": 106.13425925925927,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 13680,
+      "type": "rain",
+      "intensity": 121,
+      "max_lightning": 9.036081054687518,
+      "max_rain": 121.23842592592594,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 13720,
+      "type": "thunder_both",
+      "intensity": 255,
+      "max_lightning": 150.88949869791665,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 13760,
+      "type": "audio",
+      "intensity": 27,
+      "max_lightning": 0.00026009114582592474,
+      "max_rain": 0.0,
+      "avg_audio": 27.665399685502052
+    },
+    {
+      "start_ms": 13800,
+      "type": "audio",
+      "intensity": 36,
+      "max_lightning": 0.0,
+      "max_rain": 2.488425925925926,
+      "avg_audio": 36.99617139995098
+    },
+    {
+      "start_ms": 13840,
+      "type": "rain",
+      "intensity": 55,
+      "max_lightning": 0.0,
+      "max_rain": 55.873842592592595,
+      "avg_audio": 250.00498563051224
+    },
+    {
+      "start_ms": 13880,
+      "type": "rain",
+      "intensity": 167,
+      "max_lightning": 27.528345703124973,
+      "max_rain": 167.10069444444446,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 13920,
+      "type": "rain",
+      "intensity": 70,
+      "max_lightning": 0.0,
+      "max_rain": 70.65972222222223,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 13960,
+      "type": "rain",
+      "intensity": 119,
+      "max_lightning": 0.0,
+      "max_rain": 119.7337962962963,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14000,
+      "type": "rain",
+      "intensity": 158,
+      "max_lightning": 0.0,
+      "max_rain": 158.33333333333334,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14040,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14080,
+      "type": "rain",
+      "intensity": 52,
+      "max_lightning": 0.1323365885416905,
+      "max_rain": 52.517361111111114,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14120,
+      "type": "rain",
+      "intensity": 86,
+      "max_lightning": 0.0,
+      "max_rain": 86.1400462962963,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14160,
+      "type": "rain",
+      "intensity": 130,
+      "max_lightning": 0.0,
+      "max_rain": 130.61342592592592,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14200,
+      "type": "rain",
+      "intensity": 72,
+      "max_lightning": 0.0,
+      "max_rain": 72.71412037037037,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14240,
+      "type": "rain",
+      "intensity": 149,
+      "max_lightning": 10.759622070312542,
+      "max_rain": 149.85532407407408,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14280,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14320,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 18.891150390624972,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14360,
+      "type": "rain",
+      "intensity": 197,
+      "max_lightning": 17.147825846354166,
+      "max_rain": 197.65625,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14400,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 5.477956705729185,
+      "max_rain": 12.065972222222223,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14440,
+      "type": "rain",
+      "intensity": 56,
+      "max_lightning": 0.0,
+      "max_rain": 56.192129629629626,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14480,
+      "type": "rain",
+      "intensity": 116,
+      "max_lightning": 0.0,
+      "max_rain": 116.72453703703704,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14520,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.05899641927083365,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14560,
+      "type": "rain",
+      "intensity": 39,
+      "max_lightning": 3.1112213541666605,
+      "max_rain": 39.40972222222223,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14600,
+      "type": "rain",
+      "intensity": 75,
+      "max_lightning": 5.351248046875018,
+      "max_rain": 75.63657407407408,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14640,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 19.56530110677082,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14680,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.34722222222222227,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14720,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 90.77888216145836,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14760,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14800,
+      "type": "rain",
+      "intensity": 176,
+      "max_lightning": 21.368241861979133,
+      "max_rain": 176.27314814814815,
+      "avg_audio": 193.6115124821663
+    },
+    {
+      "start_ms": 14840,
+      "type": "rain",
+      "intensity": 140,
+      "max_lightning": 0.0,
+      "max_rain": 140.76967592592595,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14880,
+      "type": "rain",
+      "intensity": 137,
+      "max_lightning": 0.0,
+      "max_rain": 137.03703703703704,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14920,
+      "type": "rain",
+      "intensity": 140,
+      "max_lightning": 0.0,
+      "max_rain": 140.71180555555557,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 14960,
+      "type": "rain",
+      "intensity": 150,
+      "max_lightning": 0.0,
+      "max_rain": 150.31828703703704,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 15000,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0019091796874903366,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 15040,
+      "type": "rain",
+      "intensity": 168,
+      "max_lightning": 0.0,
+      "max_rain": 168.48958333333334,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 15080,
+      "type": "rain",
+      "intensity": 141,
+      "max_lightning": 0.0,
+      "max_rain": 141.4351851851852,
+      "avg_audio": 245.77921718358994
+    },
+    {
+      "start_ms": 15120,
+      "type": "rain",
+      "intensity": 38,
+      "max_lightning": 0.0,
+      "max_rain": 38.570601851851855,
+      "avg_audio": 235.8548641204834
+    },
+    {
+      "start_ms": 15160,
+      "type": "rain",
+      "intensity": 169,
+      "max_lightning": 0.0,
+      "max_rain": 169.61805555555557,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 15200,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 253.66002470254898
+    },
+    {
+      "start_ms": 15240,
+      "type": "audio",
+      "intensity": 252,
+      "max_lightning": 0.037768554687475836,
+      "max_rain": 0.0,
+      "avg_audio": 252.1425837278366
+    },
+    {
+      "start_ms": 15280,
+      "type": "rain",
+      "intensity": 193,
+      "max_lightning": 0.0,
+      "max_rain": 193.92361111111111,
+      "avg_audio": 241.38460099697113
+    },
+    {
+      "start_ms": 15320,
+      "type": "rain",
+      "intensity": 189,
+      "max_lightning": 0.0,
+      "max_rain": 189.69907407407408,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 15360,
+      "type": "rain",
+      "intensity": 66,
+      "max_lightning": 7.038315429687504,
+      "max_rain": 66.75347222222223,
+      "avg_audio": 253.69887381792068
+    },
+    {
+      "start_ms": 15400,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 2.3948030598958265,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 15440,
+      "type": "rain",
+      "intensity": 80,
+      "max_lightning": 0.0,
+      "max_rain": 80.8738425925926,
+      "avg_audio": 230.51435708999634
+    },
+    {
+      "start_ms": 15480,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 15520,
+      "type": "rain",
+      "intensity": 42,
+      "max_lightning": 0.0,
+      "max_rain": 42.33217592592593,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 15560,
+      "type": "audio",
+      "intensity": 233,
+      "max_lightning": 0.0,
+      "max_rain": 23.292824074074076,
+      "avg_audio": 233.34553956985474
+    },
+    {
+      "start_ms": 15600,
+      "type": "rain",
+      "intensity": 39,
+      "max_lightning": 0.0,
+      "max_rain": 39.12037037037037,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 15640,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 6.336805555555556,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 15680,
+      "type": "audio",
+      "intensity": 223,
+      "max_lightning": 0.0,
+      "max_rain": 1.3020833333333335,
+      "avg_audio": 223.861446082592
+    },
+    {
+      "start_ms": 15720,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0014332682291566812,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 15760,
+      "type": "audio",
+      "intensity": 247,
+      "max_lightning": 0.0,
+      "max_rain": 17.824074074074073,
+      "avg_audio": 247.38399267196655
+    },
+    {
+      "start_ms": 15800,
+      "type": "rain",
+      "intensity": 66,
+      "max_lightning": 0.0,
+      "max_rain": 66.8113425925926,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 15840,
+      "type": "rain",
+      "intensity": 125,
+      "max_lightning": 0.0,
+      "max_rain": 125.40509259259258,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 15880,
+      "type": "rain",
+      "intensity": 159,
+      "max_lightning": 0.0,
+      "max_rain": 159.5775462962963,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 15920,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 61.25826595052082,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 15960,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 16000,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 84.32319805026054
+    },
+    {
+      "start_ms": 16040,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 140.80777376302083,
+      "max_rain": 200.0,
+      "avg_audio": 55.86359538137913
+    },
+    {
+      "start_ms": 16080,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 15.663939453125002,
+      "max_rain": 200.0,
+      "avg_audio": 156.0236558318138
+    },
+    {
+      "start_ms": 16120,
+      "type": "audio",
+      "intensity": 193,
+      "max_lightning": 0.0307294921874913,
+      "max_rain": 0.0,
+      "avg_audio": 193.9292362332344
+    },
+    {
+      "start_ms": 16160,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 31.6217265625,
+      "max_rain": 200.0,
+      "avg_audio": 213.15346866846085
+    },
+    {
+      "start_ms": 16200,
+      "type": "rain",
+      "intensity": 107,
+      "max_lightning": 11.48718001302079,
+      "max_rain": 107.23379629629629,
+      "avg_audio": 246.4646852016449
+    },
+    {
+      "start_ms": 16240,
+      "type": "rain",
+      "intensity": 128,
+      "max_lightning": 12.388777669270889,
+      "max_rain": 128.64583333333334,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 16280,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 34.38235611979162,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 16320,
+      "type": "rain",
+      "intensity": 119,
+      "max_lightning": 0.0,
+      "max_rain": 119.58912037037038,
+      "avg_audio": 240.13656556606293
+    },
+    {
+      "start_ms": 16360,
+      "type": "audio",
+      "intensity": 203,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 203.82144302129745
+    },
+    {
+      "start_ms": 16400,
+      "type": "rain",
+      "intensity": 196,
+      "max_lightning": 0.0,
+      "max_rain": 196.41203703703707,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 16440,
+      "type": "rain",
+      "intensity": 149,
+      "max_lightning": 0.0,
+      "max_rain": 149.82638888888889,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 16480,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 2.5775917968749678,
+      "max_rain": 19.76273148148148,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 16520,
+      "type": "rain",
+      "intensity": 64,
+      "max_lightning": 12.866255208333365,
+      "max_rain": 64.98842592592594,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 16560,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 36.31836946614586,
+      "max_rain": 200.0,
+      "avg_audio": 223.42421114444733
+    },
+    {
+      "start_ms": 16600,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.16399023437499805,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 16640,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 27.40162037037037,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 16680,
+      "type": "rain",
+      "intensity": 48,
+      "max_lightning": 1.1541295572917079,
+      "max_rain": 48.26388888888889,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 16720,
+      "type": "rain",
+      "intensity": 58,
+      "max_lightning": 10.680377278645796,
+      "max_rain": 58.56481481481481,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 16760,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 1.3924339192708528,
+      "max_rain": 28.55902777777778,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 16800,
+      "type": "rain",
+      "intensity": 38,
+      "max_lightning": 8.753694010416652,
+      "max_rain": 38.94675925925926,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 16840,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.39329654947919435,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 16880,
+      "type": "rain",
+      "intensity": 33,
+      "max_lightning": 10.913662434895778,
+      "max_rain": 33.651620370370374,
+      "avg_audio": 221.48180097341537
+    },
+    {
+      "start_ms": 16920,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.4245849609375,
+      "max_rain": 16.75347222222222,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 16960,
+      "type": "audio",
+      "intensity": 199,
+      "max_lightning": 0.0,
+      "max_rain": 26.533564814814817,
+      "avg_audio": 199.98977422714233
+    },
+    {
+      "start_ms": 17000,
+      "type": "audio",
+      "intensity": 254,
+      "max_lightning": 5.11555013020836,
+      "max_rain": 19.82060185185185,
+      "avg_audio": 254.7563874721527
+    },
+    {
+      "start_ms": 17040,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 19.96527777777778,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 17080,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 28.86687988281248,
+      "max_rain": 200.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 17120,
+      "type": "audio",
+      "intensity": 152,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 152.38486468791962
+    },
+    {
+      "start_ms": 17160,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.8241735026042079,
+      "max_rain": 0.34722222222222227,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 17200,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.007730794270825924,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 17240,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.03220703124996618,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 17280,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 1.5941982421874825,
+      "max_rain": 18.113425925925927,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 17320,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 17360,
+      "type": "audio",
+      "intensity": 223,
+      "max_lightning": 1.3245777994791808,
+      "max_rain": 28.84837962962963,
+      "avg_audio": 223.8999304175377
+    },
+    {
+      "start_ms": 17400,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.024476236979140253,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 17440,
+      "type": "rain",
+      "intensity": 39,
+      "max_lightning": 5.444803385416708,
+      "max_rain": 39.2650462962963,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 17480,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 17520,
+      "type": "audio",
+      "intensity": 201,
+      "max_lightning": 0.04667252604170499,
+      "max_rain": 0.0,
+      "avg_audio": 201.62540405988693
+    },
+    {
+      "start_ms": 17560,
+      "type": "audio",
+      "intensity": 191,
+      "max_lightning": 0.0,
+      "max_rain": 16.261574074074076,
+      "avg_audio": 191.35686546564102
+    },
+    {
+      "start_ms": 17600,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.25965397135414603,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 17640,
+      "type": "audio",
+      "intensity": 199,
+      "max_lightning": 0.0,
+      "max_rain": 5.034722222222222,
+      "avg_audio": 199.3380331993103
+    },
+    {
+      "start_ms": 17680,
+      "type": "audio",
+      "intensity": 238,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 238.5591334104538
+    },
+    {
+      "start_ms": 17720,
+      "type": "audio",
+      "intensity": 233,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 233.7112471461296
+    },
+    {
+      "start_ms": 17760,
+      "type": "rain",
+      "intensity": 126,
+      "max_lightning": 24.934002929687534,
+      "max_rain": 126.3888888888889,
+      "avg_audio": 173.95601838827133
+    },
+    {
+      "start_ms": 17800,
+      "type": "audio",
+      "intensity": 98,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 98.56367111206055
+    },
+    {
+      "start_ms": 17840,
+      "type": "rain",
+      "intensity": 51,
+      "max_lightning": 6.674281901041783,
+      "max_rain": 51.64930555555556,
+      "avg_audio": 112.55015820264816
+    },
+    {
+      "start_ms": 17880,
+      "type": "audio",
+      "intensity": 116,
+      "max_lightning": 0.049124023437397565,
+      "max_rain": 0.0,
+      "avg_audio": 116.11187428236008
+    },
+    {
+      "start_ms": 17920,
+      "type": "audio",
+      "intensity": 147,
+      "max_lightning": 8.711514973958302,
+      "max_rain": 10.127314814814815,
+      "avg_audio": 147.19125777482986
+    },
+    {
+      "start_ms": 17960,
+      "type": "audio",
+      "intensity": 202,
+      "max_lightning": 0.009789388020882937,
+      "max_rain": 0.0,
+      "avg_audio": 202.4492758512497
+    },
+    {
+      "start_ms": 18000,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.005495117187496134,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18040,
+      "type": "rain",
+      "intensity": 34,
+      "max_lightning": 14.003135742187574,
+      "max_rain": 34.69328703703704,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18080,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.01490820312492076,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18120,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 22.511574074074076,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18160,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0710325520833578,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18200,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.6349046223958964,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18240,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 8.193424479166586,
+      "max_rain": 9.20138888888889,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18280,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.08328450520831722,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18320,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 11.891488932291743,
+      "max_rain": 13.339120370370372,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18360,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0226168619791963,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18400,
+      "type": "rain",
+      "intensity": 32,
+      "max_lightning": 0.0,
+      "max_rain": 32.667824074074076,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18440,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18480,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.1115071614582689,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18520,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 1.385428059895875,
+      "max_rain": 15.538194444444445,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18560,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.17473697916670403,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18600,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 1.3840445963541923,
+      "max_rain": 18.113425925925927,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18640,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18680,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18720,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 3.3667747395833767,
+      "max_rain": 18.055555555555557,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18760,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18800,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 1.896424153645904,
+      "max_rain": 20.457175925925927,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18840,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.24136458333327082,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18880,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 12.268518518518519,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18920,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.005046875000013528,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 18960,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 19000,
+      "type": "audio",
+      "intensity": 247,
+      "max_lightning": 0.6791809895833211,
+      "max_rain": 21.58564814814815,
+      "avg_audio": 247.86503165960312
+    },
+    {
+      "start_ms": 19040,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 19080,
+      "type": "rain",
+      "intensity": 57,
+      "max_lightning": 0.0,
+      "max_rain": 57.175925925925924,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 19120,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 19160,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 19200,
+      "type": "rain",
+      "intensity": 52,
+      "max_lightning": 0.0,
+      "max_rain": 52.37268518518518,
+      "avg_audio": 254.42329734563828
+    },
+    {
+      "start_ms": 19240,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 19280,
+      "type": "rain",
+      "intensity": 56,
+      "max_lightning": 1.5333369140624766,
+      "max_rain": 56.59722222222222,
+      "avg_audio": 250.07576823234558
+    },
+    {
+      "start_ms": 19320,
+      "type": "audio",
+      "intensity": 242,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 242.06591963768005
+    },
+    {
+      "start_ms": 19360,
+      "type": "rain",
+      "intensity": 98,
+      "max_lightning": 6.651974934895741,
+      "max_rain": 98.35069444444446,
+      "avg_audio": 205.19046396017075
+    },
+    {
+      "start_ms": 19400,
+      "type": "audio",
+      "intensity": 241,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 241.23719930648804
+    },
+    {
+      "start_ms": 19440,
+      "type": "audio",
+      "intensity": 233,
+      "max_lightning": 0.029650390625025124,
+      "max_rain": 0.0,
+      "avg_audio": 233.70492428541183
+    },
+    {
+      "start_ms": 19480,
+      "type": "rain",
+      "intensity": 96,
+      "max_lightning": 9.988479492187494,
+      "max_rain": 96.58564814814815,
+      "avg_audio": 250.19646495580673
+    },
+    {
+      "start_ms": 19520,
+      "type": "audio",
+      "intensity": 202,
+      "max_lightning": 0.14030533854157454,
+      "max_rain": 0.0,
+      "avg_audio": 202.41983503103256
+    },
+    {
+      "start_ms": 19560,
+      "type": "rain",
+      "intensity": 60,
+      "max_lightning": 8.028194661458388,
+      "max_rain": 60.99537037037038,
+      "avg_audio": 247.978295981884
+    },
+    {
+      "start_ms": 19600,
+      "type": "audio",
+      "intensity": 230,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 230.2171978354454
+    },
+    {
+      "start_ms": 19640,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.10128059895835974,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 19680,
+      "type": "audio",
+      "intensity": 215,
+      "max_lightning": 1.262371744791582,
+      "max_rain": 3.84837962962963,
+      "avg_audio": 215.65175861120224
+    },
+    {
+      "start_ms": 19720,
+      "type": "audio",
+      "intensity": 191,
+      "max_lightning": 0.1827942708333694,
+      "max_rain": 0.0,
+      "avg_audio": 191.94815933704376
+    },
+    {
+      "start_ms": 19760,
+      "type": "audio",
+      "intensity": 229,
+      "max_lightning": 3.061377929687498,
+      "max_rain": 7.320601851851851,
+      "avg_audio": 229.58407580852509
+    },
+    {
+      "start_ms": 19800,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.06633430989587907,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 19840,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.8612613932291537,
+      "max_rain": 1.6493055555555558,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 19880,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.06223372395837714,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 19920,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0748011067707921,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 19960,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 16.579861111111114,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 20000,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.02076855468756378,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 20040,
+      "type": "audio",
+      "intensity": 239,
+      "max_lightning": 3.799915039062426,
+      "max_rain": 23.900462962962965,
+      "avg_audio": 239.89331781864166
+    },
+    {
+      "start_ms": 20080,
+      "type": "audio",
+      "intensity": 245,
+      "max_lightning": 0.009468424479126724,
+      "max_rain": 0.0,
+      "avg_audio": 245.5700308084488
+    },
+    {
+      "start_ms": 20120,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.06497851562511982,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 20160,
+      "type": "audio",
+      "intensity": 246,
+      "max_lightning": 0.0,
+      "max_rain": 8.59375,
+      "avg_audio": 246.05388164520264
+    },
+    {
+      "start_ms": 20200,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.04938964843745168,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 20240,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 13.16550925925926,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 20280,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 20320,
+      "type": "audio",
+      "intensity": 251,
+      "max_lightning": 0.0,
+      "max_rain": 21.961805555555557,
+      "avg_audio": 251.24651581048965
+    },
+    {
+      "start_ms": 20360,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 20400,
+      "type": "audio",
+      "intensity": 251,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 251.9748455286026
+    },
+    {
+      "start_ms": 20440,
+      "type": "rain",
+      "intensity": 69,
+      "max_lightning": 5.437681315104243,
+      "max_rain": 69.18402777777779,
+      "avg_audio": 226.041419506073
+    },
+    {
+      "start_ms": 20480,
+      "type": "audio",
+      "intensity": 241,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 241.221042573452
+    },
+    {
+      "start_ms": 20520,
+      "type": "rain",
+      "intensity": 40,
+      "max_lightning": 5.130070963541729,
+      "max_rain": 40.625,
+      "avg_audio": 197.84279823303223
+    },
+    {
+      "start_ms": 20560,
+      "type": "audio",
+      "intensity": 233,
+      "max_lightning": 0.05365624999991496,
+      "max_rain": 0.0,
+      "avg_audio": 233.8975891470909
+    },
+    {
+      "start_ms": 20600,
+      "type": "audio",
+      "intensity": 242,
+      "max_lightning": 0.12677506510418082,
+      "max_rain": 0.0,
+      "avg_audio": 242.1088421344757
+    },
+    {
+      "start_ms": 20640,
+      "type": "rain",
+      "intensity": 30,
+      "max_lightning": 4.9260543619791575,
+      "max_rain": 30.439814814814817,
+      "avg_audio": 235.85337460041046
+    },
+    {
+      "start_ms": 20680,
+      "type": "audio",
+      "intensity": 250,
+      "max_lightning": 0.04468587239581723,
+      "max_rain": 0.0,
+      "avg_audio": 250.3670758008957
+    },
+    {
+      "start_ms": 20720,
+      "type": "audio",
+      "intensity": 236,
+      "max_lightning": 2.410657552083404,
+      "max_rain": 8.883101851851851,
+      "avg_audio": 236.06166422367096
+    },
+    {
+      "start_ms": 20760,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.029108072916605464,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 20800,
+      "type": "audio",
+      "intensity": 238,
+      "max_lightning": 2.1950696614583305,
+      "max_rain": 5.844907407407407,
+      "avg_audio": 238.7333768606186
+    },
+    {
+      "start_ms": 20840,
+      "type": "audio",
+      "intensity": 214,
+      "max_lightning": 0.09057259114588873,
+      "max_rain": 0.0,
+      "avg_audio": 214.95157778263092
+    },
+    {
+      "start_ms": 20880,
+      "type": "audio",
+      "intensity": 218,
+      "max_lightning": 0.09177343749999806,
+      "max_rain": 0.0,
+      "avg_audio": 218.7837329506874
+    },
+    {
+      "start_ms": 20920,
+      "type": "audio",
+      "intensity": 211,
+      "max_lightning": 1.2004921875000405,
+      "max_rain": 19.386574074074076,
+      "avg_audio": 211.23425245285034
+    },
+    {
+      "start_ms": 20960,
+      "type": "audio",
+      "intensity": 194,
+      "max_lightning": 0.03724837239575152,
+      "max_rain": 0.0,
+      "avg_audio": 194.53399658203125
+    },
+    {
+      "start_ms": 21000,
+      "type": "audio",
+      "intensity": 231,
+      "max_lightning": 0.0,
+      "max_rain": 10.15625,
+      "avg_audio": 231.76600992679596
+    },
+    {
+      "start_ms": 21040,
+      "type": "audio",
+      "intensity": 240,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 240.88565737009048
+    },
+    {
+      "start_ms": 21080,
+      "type": "audio",
+      "intensity": 226,
+      "max_lightning": 0.057009765624945884,
+      "max_rain": 0.0,
+      "avg_audio": 226.85630857944489
+    },
+    {
+      "start_ms": 21120,
+      "type": "audio",
+      "intensity": 213,
+      "max_lightning": 2.148203450520813,
+      "max_rain": 28.29861111111111,
+      "avg_audio": 213.58901649713516
+    },
+    {
+      "start_ms": 21160,
+      "type": "audio",
+      "intensity": 232,
+      "max_lightning": 0.16143359374998453,
+      "max_rain": 0.0,
+      "avg_audio": 232.2359535098076
+    },
+    {
+      "start_ms": 21200,
+      "type": "audio",
+      "intensity": 168,
+      "max_lightning": 3.942865559895796,
+      "max_rain": 21.99074074074074,
+      "avg_audio": 168.3798024058342
+    },
+    {
+      "start_ms": 21240,
+      "type": "audio",
+      "intensity": 217,
+      "max_lightning": 0.2287695312500773,
+      "max_rain": 0.0,
+      "avg_audio": 217.37498134374619
+    },
+    {
+      "start_ms": 21280,
+      "type": "rain",
+      "intensity": 60,
+      "max_lightning": 7.9646272786458745,
+      "max_rain": 60.416666666666664,
+      "avg_audio": 163.46117913722992
+    },
+    {
+      "start_ms": 21320,
+      "type": "audio",
+      "intensity": 198,
+      "max_lightning": 0.000592122395821093,
+      "max_rain": 0.0,
+      "avg_audio": 198.03839653730392
+    },
+    {
+      "start_ms": 21360,
+      "type": "audio",
+      "intensity": 164,
+      "max_lightning": 0.00022135416666344552,
+      "max_rain": 0.0,
+      "avg_audio": 164.86830443143845
+    },
+    {
+      "start_ms": 21400,
+      "type": "rain",
+      "intensity": 59,
+      "max_lightning": 0.0,
+      "max_rain": 59.519675925925924,
+      "avg_audio": 186.57748192548752
+    },
+    {
+      "start_ms": 21440,
+      "type": "audio",
+      "intensity": 188,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 188.4997683763504
+    },
+    {
+      "start_ms": 21480,
+      "type": "rain",
+      "intensity": 164,
+      "max_lightning": 0.0,
+      "max_rain": 164.93055555555554,
+      "avg_audio": 189.69688653945923
+    },
+    {
+      "start_ms": 21520,
+      "type": "audio",
+      "intensity": 164,
+      "max_lightning": 0.002672851562428491,
+      "max_rain": 0.0,
+      "avg_audio": 164.35385763645172
+    },
+    {
+      "start_ms": 21560,
+      "type": "audio",
+      "intensity": 183,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 183.54779809713364
+    },
+    {
+      "start_ms": 21600,
+      "type": "rain",
+      "intensity": 182,
+      "max_lightning": 0.0,
+      "max_rain": 182.78356481481484,
+      "avg_audio": 234.55616980791092
+    },
+    {
+      "start_ms": 21640,
+      "type": "audio",
+      "intensity": 226,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 226.43129378557205
+    },
+    {
+      "start_ms": 21680,
+      "type": "rain",
+      "intensity": 174,
+      "max_lightning": 0.0,
+      "max_rain": 174.6238425925926,
+      "avg_audio": 156.43734723329544
+    },
+    {
+      "start_ms": 21720,
+      "type": "audio",
+      "intensity": 192,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 192.24993914365768
+    },
+    {
+      "start_ms": 21760,
+      "type": "rain",
+      "intensity": 33,
+      "max_lightning": 4.726475911458311,
+      "max_rain": 33.15972222222223,
+      "avg_audio": 169.71339404582977
+    },
+    {
+      "start_ms": 21800,
+      "type": "audio",
+      "intensity": 194,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 194.11759972572327
+    },
+    {
+      "start_ms": 21840,
+      "type": "audio",
+      "intensity": 170,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 170.39758533239365
+    },
+    {
+      "start_ms": 21880,
+      "type": "rain",
+      "intensity": 66,
+      "max_lightning": 1.761990234374994,
+      "max_rain": 66.95601851851852,
+      "avg_audio": 142.61759519577026
+    },
+    {
+      "start_ms": 21920,
+      "type": "audio",
+      "intensity": 158,
+      "max_lightning": 0.017143880208323026,
+      "max_rain": 0.0,
+      "avg_audio": 158.496213555336
+    },
+    {
+      "start_ms": 21960,
+      "type": "rain",
+      "intensity": 158,
+      "max_lightning": 8.487216796875028,
+      "max_rain": 158.2175925925926,
+      "avg_audio": 180.16170859336853
+    },
+    {
+      "start_ms": 22000,
+      "type": "audio",
+      "intensity": 181,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 181.20452463626862
+    },
+    {
+      "start_ms": 22040,
+      "type": "audio",
+      "intensity": 197,
+      "max_lightning": 0.0026507161458056315,
+      "max_rain": 0.0,
+      "avg_audio": 197.3599049448967
+    },
+    {
+      "start_ms": 22080,
+      "type": "rain",
+      "intensity": 96,
+      "max_lightning": 4.696875325520832,
+      "max_rain": 96.41203703703704,
+      "avg_audio": 152.27939754724503
+    },
+    {
+      "start_ms": 22120,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.004615234374998067,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 22160,
+      "type": "rain",
+      "intensity": 79,
+      "max_lightning": 0.0,
+      "max_rain": 79.34027777777779,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 22200,
+      "type": "audio",
+      "intensity": 255,
+      "max_lightning": 0.03331380208321093,
+      "max_rain": 0.0,
+      "avg_audio": 255.0
+    },
+    {
+      "start_ms": 22240,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 183.5970738530159
+    },
+    {
+      "start_ms": 22280,
+      "type": "audio",
+      "intensity": 74,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 74.22680541872978
+    },
+    {
+      "start_ms": 22320,
+      "type": "audio",
+      "intensity": 105,
+      "max_lightning": 0.0,
+      "max_rain": 0.0,
+      "avg_audio": 105.29144570231438
+    },
+    {
+      "start_ms": 22360,
+      "type": "rain",
+      "intensity": 142,
+      "max_lightning": 8.266714843749968,
+      "max_rain": 142.07175925925927,
+      "avg_audio": 49.3413707613945
+    },
+    {
+      "start_ms": 22400,
+      "type": "rain",
+      "intensity": 200,
+      "max_lightning": 0.0,
+      "max_rain": 200.0,
+      "avg_audio": 35.23615904152393
+    }
+  ],
+  "source": "rule_based"
+}

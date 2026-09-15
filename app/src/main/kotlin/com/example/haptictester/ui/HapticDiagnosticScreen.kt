@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts.OpenDocument
+import androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree
 import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +32,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -91,6 +93,7 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val isTesting by viewModel.isTesting.collectAsState()
     val hasAmplitude by viewModel.hasAmplitude.collectAsState()
     val hasVibrator by viewModel.hasVibrator.collectAsState()
+    val hasPrimitives by viewModel.hasPrimitives.collectAsState()
     val selectedAudioName by viewModel.selectedAudioName.collectAsState()
     val audioPlaying by viewModel.audioPlaying.collectAsState()
     val audioLevel by viewModel.audioLevel.collectAsState()
@@ -108,8 +111,13 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val videoMapWindows by viewModel.videoMapWindows.collectAsState()
     val videoMapWindowSizeMs by viewModel.videoMapWindowSizeMs.collectAsState()
     val hapticTrackDurationMs by viewModel.hapticTrackDurationMs.collectAsState()
+    val eventTriggerMode by viewModel.eventTriggerMode.collectAsState()
+    val pipelineEventsName by viewModel.pipelineEventsName.collectAsState()
+    val pipelineEventCount by viewModel.pipelineEventCount.collectAsState()
     val compareSlots by viewModel.compareSlots.collectAsState()
     val activeCompareAlgorithm by viewModel.activeCompareAlgorithm.collectAsState()
+    val demoVideoUri by viewModel.demoVideoUri.collectAsState()
+    val folderSummary by viewModel.folderSummary.collectAsState()
 
     val recordAudioGranted =
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -149,6 +157,9 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val openWavLauncher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
         if (uri != null) viewModel.loadVideoHapticWav(uri)
     }
+    val openEventsLauncher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
+        if (uri != null) viewModel.loadPipelineEvents(uri)
+    }
     val openCompareLauncher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
         val algorithm = pendingCompareAlgorithm
         if (uri != null && algorithm != null) {
@@ -156,13 +167,25 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
         }
         pendingCompareAlgorithm = null
     }
+    val openFolderLauncher = rememberLauncherForActivityResult(OpenDocumentTree()) { uri ->
+        if (uri != null) viewModel.loadFolder(uri)
+    }
     val permissionLauncher = rememberLauncherForActivityResult(RequestPermission()) { /* handled in UI */ }
 
+    LaunchedEffect(Unit) {
+        viewModel.loadBundledDemo()
+    }
+    LaunchedEffect(demoVideoUri) {
+        val uri = demoVideoUri ?: return@LaunchedEffect
+        loadedVideoUri = uri
+    }
+
     val hasCompareReady = compareSlots.values.any { it.isReady }
+    val hasPipelineEvents = pipelineEventCount > 0
     val canPlayVideo = selectedVideoName != null &&
         videoPrepared &&
         !hapticTrackLoading &&
-        (selectedHapticTrackName != null || hasCompareReady)
+        (selectedHapticTrackName != null || hasCompareReady || (eventTriggerMode && hasPipelineEvents))
 
     DisposableEffect(videoPlayer) {
         val listener = object : Player.Listener {
@@ -285,9 +308,14 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                         videoDurationMs = videoDurationMs,
                         durationMismatch = durationMismatch,
                         videoError = videoError,
+                        folderSummary = folderSummary,
+                        onSelectFolder = { openFolderLauncher.launch(null) },
                         onSelectVideo = { openVideoLauncher.launch(arrayOf("video/*")) },
                         onSelectJson = { openJsonLauncher.launch(arrayOf("application/json", "text/*", "*/*")) },
                         onSelectWav = { openWavLauncher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/*")) },
+                        onSelectPipelineEvents = {
+                            openEventsLauncher.launch(arrayOf("application/json", "text/*", "*/*"))
+                        },
                         onLoadCompareSlot = { algorithm ->
                             pendingCompareAlgorithm = algorithm
                             openCompareLauncher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/*"))
@@ -318,6 +346,10 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                             }
                             isVideoFullscreen = true
                         },
+                        eventTriggerMode = eventTriggerMode,
+                        onEventTriggerModeChange = viewModel::setEventTriggerMode,
+                        pipelineEventsName = pipelineEventsName,
+                        pipelineEventCount = pipelineEventCount,
                         videoPlayer = videoPlayer,
                     )
 
@@ -362,6 +394,7 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                 HardwareStatusCard(
                     hasVibrator = hasVibrator,
                     hasAmplitude = hasAmplitude,
+                    hasPrimitives = hasPrimitives,
                     isTesting = isTesting,
                     audioPlaying = audioPlaying,
                     videoPlaying = videoPlaying,
@@ -437,25 +470,42 @@ private fun VideoTab(
     videoDurationMs: Long,
     durationMismatch: Boolean,
     videoError: String?,
+    folderSummary: String?,
+    onSelectFolder: () -> Unit,
     onSelectVideo: () -> Unit,
     onSelectJson: () -> Unit,
     onSelectWav: () -> Unit,
+    onSelectPipelineEvents: () -> Unit,
     onLoadCompareSlot: (CompareAlgorithm) -> Unit,
     onSwitchCompareSlot: (CompareAlgorithm) -> Unit,
     onPlayVideo: () -> Unit,
     onPauseVideo: () -> Unit,
     onStopVideo: () -> Unit,
     onFullscreen: () -> Unit,
+    eventTriggerMode: Boolean,
+    onEventTriggerModeChange: (Boolean) -> Unit,
+    pipelineEventsName: String?,
+    pipelineEventCount: Int,
     videoPlayer: ExoPlayer,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Synced Video Playback", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(
-                text = "Load an MP4 plus haptic tracks. Use A–D slots for ground-truth WAVs, then fullscreen to switch live.",
+                text = "Pick the Colab/output folder once — video, A–E WAVs, and events.json load automatically. Individual buttons remain as a fallback.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
+            Button(onClick = onSelectFolder, modifier = Modifier.fillMaxWidth()) {
+                Text("Load folder")
+            }
+            if (folderSummary != null) {
+                Text(
+                    text = "Detected: $folderSummary",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
 
             Text("Algorithm compare (WAV)", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -528,8 +578,25 @@ private fun VideoTab(
                 }
             }
 
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text("Event-Trigger Mode", style = MaterialTheme.typography.bodySmall)
+                Switch(checked = eventTriggerMode, onCheckedChange = onEventTriggerModeChange)
+            }
+            Text(
+                text = "When ON: punches follow events.json flash times (same for A–E). WAV accents are muted — they land late vs picture. Turn OFF to compare continuous A–E feel.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
             FileRow(label = "Video", value = selectedVideoName)
             FileRow(label = "Haptic track", value = selectedHapticTrackName)
+            FileRow(
+                label = "Pipeline events",
+                value = pipelineEventsName?.let { "$it ($pipelineEventCount peaks)" },
+            )
 
             if (videoMapWindows > 0) {
                 Text(
@@ -564,6 +631,9 @@ private fun VideoTab(
                 OutlinedButton(onClick = onSelectWav, modifier = Modifier.weight(1f)) { Text("WAV") }
                 OutlinedButton(onClick = onSelectJson, modifier = Modifier.weight(1f)) { Text("JSON") }
             }
+            OutlinedButton(onClick = onSelectPipelineEvents, modifier = Modifier.fillMaxWidth()) {
+                Text("Load pipeline events.json")
+            }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
@@ -576,7 +646,7 @@ private fun VideoTab(
             }
 
             OutlinedButton(onClick = onFullscreen, enabled = selectedVideoName != null, modifier = Modifier.fillMaxWidth()) {
-                Text("Fullscreen + live A/B/C/D switch")
+                Text("Fullscreen + live A/B/C/D/E switch")
             }
 
             if (videoError != null) {
@@ -709,6 +779,7 @@ private fun ManualTestTab(
 private fun HardwareStatusCard(
     hasVibrator: Boolean,
     hasAmplitude: Boolean,
+    hasPrimitives: Boolean,
     isTesting: Boolean,
     audioPlaying: Boolean,
     videoPlaying: Boolean,
@@ -720,6 +791,16 @@ private fun HardwareStatusCard(
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Device", style = MaterialTheme.typography.labelLarge)
             Text("Vibrator: ${if (hasVibrator) "yes" else "no"} · Amplitude control: ${if (hasAmplitude) "yes" else "no"}")
+            Text(
+                "Scalable primitives: ${if (hasPrimitives) "yes" else "no"} · " +
+                    "Accent strength via ${
+                        when {
+                            hasAmplitude -> "amplitude"
+                            hasPrimitives -> "primitive scale"
+                            else -> "duty cycle"
+                        }
+                    }",
+            )
             Text("Active: ${listOfNotNull(
                 if (isTesting) "manual test" else null,
                 if (audioPlaying) "audio" else null,

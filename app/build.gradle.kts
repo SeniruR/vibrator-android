@@ -37,6 +37,7 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.3.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.1")
+    implementation("androidx.documentfile:documentfile:1.0.1")
     // Coroutines for optional background tasks (future)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.1")
 }
