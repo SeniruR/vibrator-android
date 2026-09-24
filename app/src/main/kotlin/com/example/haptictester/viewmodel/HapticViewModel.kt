@@ -57,7 +57,6 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     private var hapticTrackToken: Long = 0L
     private val compareLoadJobs = mutableMapOf<CompareAlgorithm, Job>()
     private val compareLoadTokens = mutableMapOf<CompareAlgorithm, Long>()
-    private val compareSlotUris = mutableMapOf<CompareAlgorithm, Uri>()
 
     private val _compareSlots = MutableStateFlow(defaultCompareSlots())
     val compareSlots = _compareSlots.asStateFlow()
@@ -183,7 +182,10 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
                 loadHapticTrack(uri, HapticTrackFormat.WAV)
             }
         }
-        compareSlotUris.forEach { (algorithm, uri) ->
+        val slotsToReload = _compareSlots.value.mapNotNull { (algorithm, slot) ->
+            slot.uri?.let { algorithm to it }
+        }
+        slotsToReload.forEach { (algorithm, uri) ->
             loadCompareSlot(algorithm, uri)
         }
     }
@@ -460,7 +462,6 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
 
     fun loadCompareSlot(algorithm: CompareAlgorithm, uri: Uri) {
         val app = getApplication<Application>()
-        compareSlotUris[algorithm] = uri
         takePersistableReadPermission(app, uri)
         val fileName = resolveDisplayName(app, uri) ?: algorithm.shortLabel
 
@@ -469,7 +470,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         compareLoadJobs[algorithm]?.cancel()
 
         updateCompareSlot(algorithm) {
-            it.copy(loading = true, error = null, fileName = fileName)
+            it.copy(loading = true, error = null, fileName = fileName, uri = uri)
         }
 
         compareLoadJobs[algorithm] = viewModelScope.launch {
