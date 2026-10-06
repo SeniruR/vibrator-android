@@ -1,5 +1,7 @@
 package com.example.haptictester.haptic
 
+import android.net.Uri
+
 enum class CompareAlgorithm(val id: String, val shortLabel: String, val description: String) {
     A("a", "A", "Perception"),
     B("b", "B", "Freq shift"),
@@ -16,6 +18,7 @@ enum class CompareAlgorithm(val id: String, val shortLabel: String, val descript
 data class CompareSlotState(
     val algorithm: CompareAlgorithm,
     val fileName: String? = null,
+    val uri: Uri? = null,
     val map: HapticMapData? = null,
     val loading: Boolean = false,
     val error: String? = null,

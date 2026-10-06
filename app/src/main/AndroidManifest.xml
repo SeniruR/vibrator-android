@@ -6,6 +6,7 @@
     <application
         android:allowBackup="true"
         android:label="Haptic Diagnostic Tester"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:supportsRtl="true">
         <activity android:name=".MainActivity"
             android:exported="true">
