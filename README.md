@@ -1,48 +1,31 @@
 # Haptic Diagnostic Tester
 
-Minimal Jetpack Compose Android app to test vibrator amplitude and duty cycle on a device (Samsung A04 recommended).
-
-The app now has two playback modes:
-
-- Audio mode: load an audio file and let the app analyze it for haptic events.
-- Video mode: load a `video.mp4` plus a haptic track (WAV from haptic-groundtruth or JSON from `process_video.py`), then play the video while the track drives vibrations.
-
-Quick start:
-
-1. Open the `HapticDiagnosticTester` folder in Android Studio.
-2. Let Android Studio sync Gradle and install required plugins.
-3. Connect your Samsung A04 with USB debugging enabled.
-4. Run the `app` configuration.
+Minimal Jetpack Compose Android app that plays a video while one of the A–E haptic WAVs from haptic-groundtruth drives the phone's vibration motor (Samsung A04 recommended).
 
 Video workflow:
 
-1. Open the app and go to the **Video + Haptic** tab.
-2. Choose a video file (MP4).
-3. Choose a haptic track — **WAV** (from haptic-groundtruth Colab) or **JSON** (from `model_json/process_video.py`).
-4. Press Play. Video audio plays on speakers; the haptic track drives the motor.
+1. Run the haptic-groundtruth Colab and download the zip (it is named after the video).
+2. Copy the zip to the phone and extract it.
+3. Open the app, tap **Load folder**, and pick the extracted folder. The video and the A–E WAVs load automatically; anything inside `components/` is ignored.
+4. Press Play and switch between A–E (also available in Fullscreen) to compare algorithms.
 
-### Build from terminal
+The app plays each WAV as written, including the quiet continuous layer under the accents. On motors without amplitude control, strength is rendered as an on/off duty cycle.
 
-**If you see `SDK location not found`:** Android SDK is not installed yet. Run:
+### Build and install from terminal
 
-```cmd
-setup-android.cmd
-```
-
-Open Android Studio once after install and finish the setup wizard. Then build:
+Run these from this folder (`vibrator-android`), with the phone connected and USB debugging allowed:
 
 ```cmd
 .\build.cmd
-install.cmd
+.\install.cmd
 ```
 
-If `.\build.ps1` is blocked by PowerShell execution policy, use `.\build.cmd` instead.
+`build.cmd` auto-creates `local.properties` when it finds the SDK (default: `%LOCALAPPDATA%\Android\Sdk`) and runs a clean debug build. For a faster incremental build, run `.\.gradle-wrapper\gradle-8.7\bin\gradle.bat assembleDebug` instead.
 
-`build.cmd` auto-creates `local.properties` when it finds the SDK (default: `%LOCALAPPDATA%\Android\Sdk`).
+`install.cmd` uses the SDK's `adb` and auto-uninstalls if signatures conflict (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`). If `adb devices` lists the phone as `unauthorized`, unlock it and accept the "Allow USB debugging?" prompt.
 
-`install.cmd` uses the SDK's `adb` and auto-uninstalls if signatures conflict (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`).
+**If you see `SDK location not found`:** Android SDK is not installed yet. Run `setup-android.cmd`, open Android Studio once to finish the setup wizard, then build again.
 
 Notes:
 - This project targets Android API 31+. Adjust `minSdk` in `app/build.gradle.kts` if needed.
-- The app calls `vibrator.cancel()` before issuing new commands and enforces a 100ms throttle (max ~10Hz).
 - Tests should be done on the physical device; emulator haptics are unreliable.

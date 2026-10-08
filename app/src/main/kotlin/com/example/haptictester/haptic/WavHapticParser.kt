@@ -12,7 +12,6 @@ import kotlin.math.sqrt
 object WavHapticParser {
     private const val DEFAULT_WINDOW_SIZE_MS = 20L
     private const val MIN_INTENSITY_DEFAULT = 18
-    private const val MIN_INTENSITY_COMPAT = 1
 
     /**
      * Envelope below which a window is silent when mapping amplitude directly.
@@ -21,30 +20,21 @@ object WavHapticParser {
      */
     private const val DIRECT_NOISE_FLOOR = 0.02
 
-    /**
-     * Event-Trigger Mode: ignore the continuous bed (~0.2–0.35) so the ERM is
-     * not held on for the whole clip. Only accent spikes (~0.7+) drive the WAV
-     * path; explosion punches come from events.json overlay.
-     */
-    private const val EVENT_TRIGGER_ACCENT_FLOOR = 0.48
-
     fun parse(
         context: Context,
         uri: Uri,
         windowSizeMs: Long = DEFAULT_WINDOW_SIZE_MS,
-        eventTriggerMode: Boolean = false,
     ): HapticMapData {
         context.contentResolver.openInputStream(uri)?.use { stream ->
-            return parseStream(stream, windowSizeMs, eventTriggerMode = eventTriggerMode)
+            return parseStream(stream, windowSizeMs)
         } ?: throw IllegalArgumentException("Unable to open WAV file")
     }
 
     fun parseStream(
         input: InputStream,
         windowSizeMs: Long = DEFAULT_WINDOW_SIZE_MS,
-        eventTriggerMode: Boolean = false,
     ): HapticMapData {
-        val minIntensity = if (eventTriggerMode) MIN_INTENSITY_COMPAT else MIN_INTENSITY_DEFAULT
+        val minIntensity = MIN_INTENSITY_DEFAULT
         val header = readFully(input, 12)
         val riff = String(header, 0, 4, Charsets.US_ASCII)
         val wave = String(header, 8, 4, Charsets.US_ASCII)
@@ -190,60 +180,41 @@ object WavHapticParser {
             if (m.sampleCount > 0) m.zeroCrossings.toDouble() / m.sampleCount else 0.0
         }
 
-        val track = if (eventTriggerMode) {
-            // Accent-only map: continuous bed stays silent so Event-Trigger Mode
-            // reads as quiet + punches, not a constant rumble with tiny bumps.
-            buildMap<Long, Int> {
-                sortedStarts.forEachIndexed { index, startMs ->
-                    val value = envelopeValues[index]
-                    if (value < EVENT_TRIGGER_ACCENT_FLOOR) {
-                        put(startMs, 0)
-                        return@forEachIndexed
-                    }
-                    val scaled = ((value - EVENT_TRIGGER_ACCENT_FLOOR) /
-                        (1.0 - EVENT_TRIGGER_ACCENT_FLOOR).coerceAtLeast(1e-6))
-                        .coerceIn(0.0, 1.0)
-                    val intensity = (scaled * 255.0).roundToInt().coerceIn(0, 255)
-                    put(startMs, if (intensity < minIntensity) 0 else intensity)
+        // High-pass the envelope so steady sine carriers (A/C/D) don't read as always-on.
+        val smoothRadius = 8
+        val smoothedEnvelope = envelopeValues.mapIndexed { index, _ ->
+            val from = maxOf(0, index - smoothRadius)
+            val to = minOf(envelopeValues.size, index + smoothRadius + 1)
+            envelopeValues.subList(from, to).average()
+        }
+        val highPassEnvelope = envelopeValues.mapIndexed { index, value ->
+            maxOf(0.0, value - smoothedEnvelope[index] * 0.94)
+        }
+
+        // FM-only tracks: use changes in zero-crossing rate, not absolute level.
+        val zcrDelta = zcrValues.mapIndexed { index, value ->
+            if (index == 0) 0.0 else abs(value - zcrValues[index - 1])
+        }
+        val combined = highPassEnvelope.mapIndexed { index, env ->
+            (0.82 * env + 0.18 * zcrDelta[index]).coerceAtLeast(0.0)
+        }
+
+        val sortedCombined = combined.sorted()
+        val pLow = percentile(sortedCombined, 0.50)
+        val p90 = percentile(sortedCombined, 0.90).coerceAtLeast(1e-6)
+        val gate = pLow + (p90 - pLow) * 0.30
+
+        val track = buildMap<Long, Int> {
+            sortedStarts.forEachIndexed { index, startMs ->
+                val value = combined[index]
+                if (value < gate) {
+                    put(startMs, 0)
+                    return@forEachIndexed
                 }
-            }
-        } else {
-            // High-pass the envelope so steady sine carriers (A/C/D) don't read as always-on.
-            val smoothRadius = 8
-            val smoothedEnvelope = envelopeValues.mapIndexed { index, _ ->
-                val from = maxOf(0, index - smoothRadius)
-                val to = minOf(envelopeValues.size, index + smoothRadius + 1)
-                envelopeValues.subList(from, to).average()
-            }
-            val highPassEnvelope = envelopeValues.mapIndexed { index, value ->
-                maxOf(0.0, value - smoothedEnvelope[index] * 0.94)
-            }
-
-            // FM-only tracks: use changes in zero-crossing rate, not absolute level.
-            val zcrDelta = zcrValues.mapIndexed { index, value ->
-                if (index == 0) 0.0 else abs(value - zcrValues[index - 1])
-            }
-            val combined = highPassEnvelope.mapIndexed { index, env ->
-                (0.82 * env + 0.18 * zcrDelta[index]).coerceAtLeast(0.0)
-            }
-
-            val sortedCombined = combined.sorted()
-            val pLow = percentile(sortedCombined, 0.50)
-            val p90 = percentile(sortedCombined, 0.90).coerceAtLeast(1e-6)
-            val gate = pLow + (p90 - pLow) * 0.30
-
-            buildMap<Long, Int> {
-                sortedStarts.forEachIndexed { index, startMs ->
-                    val value = combined[index]
-                    if (value < gate) {
-                        put(startMs, 0)
-                        return@forEachIndexed
-                    }
-                    val normalized =
-                        ((value - gate) / (p90 - gate).coerceAtLeast(1e-6)).coerceIn(0.0, 1.0)
-                    val intensity = (normalized * 255.0).roundToInt().coerceIn(0, 255)
-                    put(startMs, if (intensity < minIntensity) 0 else intensity)
-                }
+                val normalized =
+                    ((value - gate) / (p90 - gate).coerceAtLeast(1e-6)).coerceIn(0.0, 1.0)
+                val intensity = (normalized * 255.0).roundToInt().coerceIn(0, 255)
+                put(startMs, if (intensity < minIntensity) 0 else intensity)
             }
         }
 

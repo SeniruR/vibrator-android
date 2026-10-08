@@ -3,18 +3,14 @@ package com.example.haptictester.haptic
 data class HapticFolderMatch(
     val videoName: String? = null,
     val slotNames: Map<CompareAlgorithm, String> = emptyMap(),
-    val eventsName: String? = null,
-    val hapticJsonName: String? = null,
 ) {
     val isEmpty: Boolean
-        get() = videoName == null && slotNames.isEmpty() && eventsName == null && hapticJsonName == null
+        get() = videoName == null && slotNames.isEmpty()
 
     fun summary(): String {
         val parts = mutableListOf<String>()
         if (videoName != null) parts += "video"
         parts += slotNames.keys.sortedBy { it.id }.map { it.shortLabel }
-        if (eventsName != null) parts += "events.json"
-        if (hapticJsonName != null) parts += hapticJsonName
         return if (parts.isEmpty()) "no matching files" else parts.joinToString(", ")
     }
 }
@@ -35,7 +31,8 @@ object HapticFolderMatcher {
         val video = byLower["video.mp4"]
             ?: names.firstOrNull { name ->
                 val lower = name.lowercase()
-                lower.endsWith(".mp4") || lower.endsWith(".mkv") || lower.endsWith(".webm")
+                lower.endsWith(".mp4") || lower.endsWith(".mkv") || lower.endsWith(".webm") ||
+                    lower.endsWith(".mov") || lower.endsWith(".avi") || lower.endsWith(".m4v")
             }
 
         val slots = linkedMapOf<CompareAlgorithm, String>()
@@ -50,22 +47,9 @@ object HapticFolderMatcher {
             val picked = exact ?: fallback
             if (picked != null) slots[algorithm] = picked
         }
-
-        val events = byLower["events.json"]
-        val hapticJson = byLower["algorithm_e_rule_based.json"]
-            ?: byLower["output_haptic_map.json"]
-            ?: names.firstOrNull { name ->
-                val lower = name.lowercase()
-                lower.endsWith(".json") &&
-                    lower != "events.json" &&
-                    (lower.contains("haptic_map") || lower.contains("rule_based"))
-            }
-
         return HapticFolderMatch(
             videoName = video,
             slotNames = slots,
-            eventsName = events,
-            hapticJsonName = hapticJson,
         )
     }
 }

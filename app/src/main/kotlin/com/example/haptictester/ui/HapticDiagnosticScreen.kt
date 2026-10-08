@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts.OpenDocument
 import androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree
 import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,7 +33,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -111,9 +111,6 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val videoMapWindows by viewModel.videoMapWindows.collectAsState()
     val videoMapWindowSizeMs by viewModel.videoMapWindowSizeMs.collectAsState()
     val hapticTrackDurationMs by viewModel.hapticTrackDurationMs.collectAsState()
-    val eventTriggerMode by viewModel.eventTriggerMode.collectAsState()
-    val pipelineEventsName by viewModel.pipelineEventsName.collectAsState()
-    val pipelineEventCount by viewModel.pipelineEventCount.collectAsState()
     val compareSlots by viewModel.compareSlots.collectAsState()
     val activeCompareAlgorithm by viewModel.activeCompareAlgorithm.collectAsState()
     val demoVideoUri by viewModel.demoVideoUri.collectAsState()
@@ -151,14 +148,8 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
             viewModel.loadVideo(uri)
         }
     }
-    val openJsonLauncher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
-        if (uri != null) viewModel.loadVideoHapticMap(uri)
-    }
     val openWavLauncher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
         if (uri != null) viewModel.loadVideoHapticWav(uri)
-    }
-    val openEventsLauncher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
-        if (uri != null) viewModel.loadPipelineEvents(uri)
     }
     val openCompareLauncher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
         val algorithm = pendingCompareAlgorithm
@@ -181,11 +172,10 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     }
 
     val hasCompareReady = compareSlots.values.any { it.isReady }
-    val hasPipelineEvents = pipelineEventCount > 0
     val canPlayVideo = selectedVideoName != null &&
         videoPrepared &&
         !hapticTrackLoading &&
-        (selectedHapticTrackName != null || hasCompareReady || (eventTriggerMode && hasPipelineEvents))
+        (selectedHapticTrackName != null || hasCompareReady)
 
     DisposableEffect(videoPlayer) {
         val listener = object : Player.Listener {
@@ -208,7 +198,6 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                         videoPrepared = true
                     }
                     Player.STATE_ENDED -> {
-                        videoPlayer.seekTo(0)
                         viewModel.stopVideo()
                     }
                 }
@@ -244,7 +233,8 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
         hapticTrackDurationMs > 0L &&
         kotlin.math.abs(videoDurationMs - hapticTrackDurationMs) > 2_000L
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    if (!isVideoFullscreen) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -311,11 +301,7 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                         folderSummary = folderSummary,
                         onSelectFolder = { openFolderLauncher.launch(null) },
                         onSelectVideo = { openVideoLauncher.launch(arrayOf("video/*")) },
-                        onSelectJson = { openJsonLauncher.launch(arrayOf("application/json", "text/*", "*/*")) },
                         onSelectWav = { openWavLauncher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/*")) },
-                        onSelectPipelineEvents = {
-                            openEventsLauncher.launch(arrayOf("application/json", "text/*", "*/*"))
-                        },
                         onLoadCompareSlot = { algorithm ->
                             pendingCompareAlgorithm = algorithm
                             openCompareLauncher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/*"))
@@ -346,10 +332,6 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                             }
                             isVideoFullscreen = true
                         },
-                        eventTriggerMode = eventTriggerMode,
-                        onEventTriggerModeChange = viewModel::setEventTriggerMode,
-                        pipelineEventsName = pipelineEventsName,
-                        pipelineEventCount = pipelineEventCount,
                         videoPlayer = videoPlayer,
                     )
 
@@ -401,6 +383,7 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                 )
             }
         }
+    }
     }
 
         if (isVideoFullscreen) {
@@ -473,26 +456,20 @@ private fun VideoTab(
     folderSummary: String?,
     onSelectFolder: () -> Unit,
     onSelectVideo: () -> Unit,
-    onSelectJson: () -> Unit,
     onSelectWav: () -> Unit,
-    onSelectPipelineEvents: () -> Unit,
     onLoadCompareSlot: (CompareAlgorithm) -> Unit,
     onSwitchCompareSlot: (CompareAlgorithm) -> Unit,
     onPlayVideo: () -> Unit,
     onPauseVideo: () -> Unit,
     onStopVideo: () -> Unit,
     onFullscreen: () -> Unit,
-    eventTriggerMode: Boolean,
-    onEventTriggerModeChange: (Boolean) -> Unit,
-    pipelineEventsName: String?,
-    pipelineEventCount: Int,
     videoPlayer: ExoPlayer,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Synced Video Playback", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(
-                text = "Pick the Colab/output folder once — video, A–E WAVs, and events.json load automatically. Individual buttons remain as a fallback.",
+                text = "Pick the Colab output folder to load the video and A–E haptic WAVs. Individual buttons remain available.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -548,7 +525,7 @@ private fun VideoTab(
             }
 
             Spacer(modifier = Modifier.height(4.dp))
-            Text("Single track (optional JSON/WAV)", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
+            Text("Single WAV track (optional)", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
 
             AndroidView(
                 factory = { ctx ->
@@ -578,25 +555,8 @@ private fun VideoTab(
                 }
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Text("Event-Trigger Mode", style = MaterialTheme.typography.bodySmall)
-                Switch(checked = eventTriggerMode, onCheckedChange = onEventTriggerModeChange)
-            }
-            Text(
-                text = "When ON: punches follow events.json flash times (same for A–E). WAV accents are muted — they land late vs picture. Turn OFF to compare continuous A–E feel.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
             FileRow(label = "Video", value = selectedVideoName)
             FileRow(label = "Haptic track", value = selectedHapticTrackName)
-            FileRow(
-                label = "Pipeline events",
-                value = pipelineEventsName?.let { "$it ($pipelineEventCount peaks)" },
-            )
 
             if (videoMapWindows > 0) {
                 Text(
@@ -629,10 +589,6 @@ private fun VideoTab(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onSelectVideo, modifier = Modifier.weight(1f)) { Text("Video") }
                 OutlinedButton(onClick = onSelectWav, modifier = Modifier.weight(1f)) { Text("WAV") }
-                OutlinedButton(onClick = onSelectJson, modifier = Modifier.weight(1f)) { Text("JSON") }
-            }
-            OutlinedButton(onClick = onSelectPipelineEvents, modifier = Modifier.fillMaxWidth()) {
-                Text("Load pipeline events.json")
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
