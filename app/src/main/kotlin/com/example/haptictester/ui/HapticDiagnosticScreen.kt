@@ -71,6 +71,7 @@ import com.example.haptictester.haptic.CompareAlgorithm
 import com.example.haptictester.haptic.CompareSlotState
 import com.example.haptictester.haptic.HapticTrackFormat
 import com.example.haptictester.viewmodel.AudioDebugFrame
+import com.example.haptictester.viewmodel.HapticLibraryViewModel
 import com.example.haptictester.viewmodel.HapticViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -115,6 +116,11 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val activeCompareAlgorithm by viewModel.activeCompareAlgorithm.collectAsState()
     val demoVideoUri by viewModel.demoVideoUri.collectAsState()
     val folderSummary by viewModel.folderSummary.collectAsState()
+
+    // Library Feature States
+    val libraryViewModel: HapticLibraryViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    var showLibraryDialog by remember { mutableStateOf(false) }
+    var showSaveDialog by remember { mutableStateOf(false) }
 
     val recordAudioGranted =
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -333,6 +339,8 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                             isVideoFullscreen = true
                         },
                         videoPlayer = videoPlayer,
+                        onOpenLibrary = { showLibraryDialog = true },
+                        onSaveLibrary = { showSaveDialog = true },
                     )
 
                     AppTab.Audio -> AudioTab(
@@ -396,6 +404,41 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                 onDismiss = { isVideoFullscreen = false },
             )
         }
+
+        // Render separate library dialog components safely at the root level
+        HapticLibraryDialogs(
+            libraryViewModel = libraryViewModel,
+            showLibraryDialog = showLibraryDialog,
+            onDismissLibrary = { showLibraryDialog = false },
+            showSaveDialog = showSaveDialog,
+            onDismissSave = { showSaveDialog = false },
+            loadedVideoUri = loadedVideoUri,
+            selectedVideoName = selectedVideoName,
+            slotAUri = compareSlots[CompareAlgorithm.A]?.uri,
+            slotBUri = compareSlots[CompareAlgorithm.B]?.uri,
+            slotCUri = compareSlots[CompareAlgorithm.C]?.uri,
+            slotDUri = compareSlots[CompareAlgorithm.D]?.uri,
+            slotEUri = compareSlots[CompareAlgorithm.E]?.uri,
+            pipelineEventsUri = null,
+            pipelineEventsName = null,
+            onLoadGroup = { group ->
+                // 1. Load video
+                group.videoUriString?.let { uriString ->
+                    val uri = Uri.parse(uriString)
+                    loadedVideoUri = uri
+                    viewModel.loadVideo(uri)
+                }
+
+                // 2. Load each slot explicitly and reliably
+                group.slotAUriString?.let { viewModel.loadCompareSlot(CompareAlgorithm.A, Uri.parse(it)) }
+                group.slotBUriString?.let { viewModel.loadCompareSlot(CompareAlgorithm.B, Uri.parse(it)) }
+                group.slotCUriString?.let { viewModel.loadCompareSlot(CompareAlgorithm.C, Uri.parse(it)) }
+                group.slotDUriString?.let { viewModel.loadCompareSlot(CompareAlgorithm.D, Uri.parse(it)) }
+                group.slotEUriString?.let { viewModel.loadCompareSlot(CompareAlgorithm.E, Uri.parse(it)) }
+
+                showLibraryDialog = false
+            }
+        )
     }
 }
 
@@ -464,6 +507,8 @@ private fun VideoTab(
     onStopVideo: () -> Unit,
     onFullscreen: () -> Unit,
     videoPlayer: ExoPlayer,
+    onOpenLibrary: () -> Unit,
+    onSaveLibrary: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -482,6 +527,14 @@ private fun VideoTab(
                     text = "Detected: $folderSummary",
                     style = MaterialTheme.typography.bodySmall,
                 )
+            }
+
+            // Library feature action buttons
+            Button(onClick = onOpenLibrary, modifier = Modifier.fillMaxWidth()) {
+                Text("Open Saved Libraries")
+            }
+            OutlinedButton(onClick = onSaveLibrary, modifier = Modifier.fillMaxWidth()) {
+                Text("Save Current Files to Library")
             }
 
             Text("Algorithm compare (WAV)", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)

@@ -372,7 +372,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         compareLoadJobs[algorithm]?.cancel()
 
         updateCompareSlot(algorithm) {
-            it.copy(loading = true, error = null, fileName = fileName)
+            it.copy(loading = true, error = null, fileName = fileName, uri = uri)
         }
 
         compareLoadJobs[algorithm] = viewModelScope.launch {
