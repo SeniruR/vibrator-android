@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -108,8 +108,17 @@ fun VideoCompareFullscreenOverlay(
     var debugVisible by remember { mutableStateOf(false) }
     var controlsVisible by remember { mutableStateOf(true) }
     var interactionRevision by remember { mutableIntStateOf(0) }
-    val durationMs = videoPlayer.duration.coerceAtLeast(0L)
+    var playerDurationMs by remember(videoPlayer) { mutableStateOf(knownDurationMs(videoPlayer)) }
+    var unseekable by remember(videoPlayer) { mutableStateOf(isUnseekable(videoPlayer)) }
+    // Fragmented MP4s report no duration until fully buffered; the haptic WAVs span the same clip.
+    val hapticDurationMs = compareSlots.values.maxOfOrNull { it.map?.durationMs ?: 0L } ?: 0L
+    val durationMs = if (playerDurationMs > 0L) playerDurationMs else hapticDurationMs
     val speedOptions = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+
+    fun refreshPlayerInfo() {
+        playerDurationMs = knownDurationMs(videoPlayer)
+        unseekable = isUnseekable(videoPlayer)
+    }
 
     fun keepControlsVisible() {
         controlsVisible = true
@@ -125,12 +134,16 @@ fun VideoCompareFullscreenOverlay(
                 newPosition: Player.PositionInfo,
                 reason: Int,
             ) {
-                positionMs = newPosition.positionMs.coerceIn(0L, durationMs)
+                positionMs = newPosition.positionMs.coerceAtLeast(0L)
                 if (reason == Player.DISCONTINUITY_REASON_SEEK) pendingSeekTargetMs = null
             }
 
             override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
                 selectedSpeed = playbackParameters.speed
+            }
+
+            override fun onEvents(player: Player, events: Player.Events) {
+                refreshPlayerInfo()
             }
         }
         videoPlayer.addListener(listener)
@@ -140,7 +153,7 @@ fun VideoCompareFullscreenOverlay(
     LaunchedEffect(pendingSeekTargetMs) {
         val targetMs = pendingSeekTargetMs ?: return@LaunchedEffect
         repeat(40) {
-            val actualMs = videoPlayer.currentPosition.coerceIn(0L, durationMs)
+            val actualMs = videoPlayer.currentPosition.coerceAtLeast(0L)
             if (kotlin.math.abs(actualMs - targetMs) <= 100L) {
                 positionMs = actualMs
                 pendingSeekTargetMs = null
@@ -148,7 +161,7 @@ fun VideoCompareFullscreenOverlay(
             }
             delay(25L)
         }
-        positionMs = videoPlayer.currentPosition.coerceIn(0L, durationMs)
+        positionMs = videoPlayer.currentPosition.coerceAtLeast(0L)
         pendingSeekTargetMs = null
     }
 
@@ -161,9 +174,9 @@ fun VideoCompareFullscreenOverlay(
     LaunchedEffect(videoPlaying, isScrubbing, pendingSeekTargetMs) {
         while (isActive) {
             if (!isScrubbing && pendingSeekTargetMs == null) {
-                positionMs = videoPlayer.currentPosition.coerceIn(0L, durationMs)
+                positionMs = videoPlayer.currentPosition.coerceAtLeast(0L)
                 if (videoPlaying) {
-                    viewModel.onVideoPlaybackPosition(positionMs.toInt(), durationMs)
+                    viewModel.onVideoPlaybackPosition(positionMs.toInt(), knownDurationMs(videoPlayer))
                 }
             }
             delay(if (videoPlaying) 20L else 100L)
@@ -250,10 +263,17 @@ fun VideoCompareFullscreenOverlay(
                                         isScrubbing = false
                                     },
                                     valueRange = 0f..durationMs.coerceAtLeast(1L).toFloat(),
-                                    enabled = durationMs > 0L,
+                                    enabled = durationMs > 0L && !unseekable,
                                     modifier = Modifier.weight(1f),
                                 )
                                 Text(formatPlaybackTime(durationMs), color = Color.White, style = MaterialTheme.typography.labelSmall)
+                            }
+                            if (unseekable) {
+                                Text(
+                                    "This video file can't be seeked (fragmented MP4). Re-export it with the latest notebook.",
+                                    color = Color(0xFFF2B84B),
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
                             }
 
                             Row(
@@ -357,6 +377,15 @@ fun VideoCompareFullscreenOverlay(
     }
 }
 
+private fun knownDurationMs(player: Player): Long = player.duration.coerceAtLeast(0L)
+
+private fun isUnseekable(player: Player): Boolean {
+    val timeline = player.currentTimeline
+    if (timeline.isEmpty) return false
+    val window = timeline.getWindow(player.currentMediaItemIndex, Timeline.Window())
+    return !window.isPlaceholder && !window.isSeekable
+}
+
 private fun formatPlaybackTime(timeMs: Long): String {
     val totalSeconds = (timeMs.coerceAtLeast(0L) / 1000L).toInt()
     return "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
@@ -400,7 +429,10 @@ private fun LiveWavPatternPanel(
                     CompareAlgorithm.D -> Color(0xFFED7777)
                     CompareAlgorithm.E -> Color.White
                 }
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -421,13 +453,13 @@ private fun LiveWavPatternPanel(
                             positionMs = positionMs,
                             durationMs = durationMs,
                             color = color,
-                            modifier = Modifier.fillMaxWidth().height(54.dp),
+                            modifier = Modifier.fillMaxWidth().weight(1f),
                         )
                     } else {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(54.dp)
+                                .weight(1f)
                                 .background(Color(0xFF080D13), RoundedCornerShape(4.dp)),
                         )
                     }
