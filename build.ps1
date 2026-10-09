@@ -1,4 +1,9 @@
+# Usage: build.cmd        clean build (slow, use when something looks stale)
+#        build.cmd fast   only rebuild what changed
+param([string]$Mode = '')
+
 $ErrorActionPreference = 'Stop'
+Set-Location $PSScriptRoot
 $version = '8.7'
 $gradleDir = ".\.gradle-wrapper\gradle-$version"
 $localPropsPath = Join-Path $PSScriptRoot 'local.properties'
@@ -64,4 +69,16 @@ if (!(Test-Path "$gradleDir\bin\gradle.bat")) {
     Remove-Item -Path $zip -Force
 }
 
-& "$gradleDir\bin\gradle.bat" clean assembleDebug
+if ($Mode -eq 'fast') {
+    & "$gradleDir\bin\gradle.bat" assembleDebug
+} else {
+    & "$gradleDir\bin\gradle.bat" clean assembleDebug
+}
+if ($LASTEXITCODE -ne 0) {
+    Write-Host ''
+    Write-Host 'Build failed. See vibrator-android\README.md, section "When something goes wrong".' -ForegroundColor Red
+    exit $LASTEXITCODE
+}
+Write-Host ''
+Write-Host 'Build finished: app\build\outputs\apk\debug\app-debug.apk' -ForegroundColor Green
+Write-Host 'Next: connect the phone and run  .\install.cmd'

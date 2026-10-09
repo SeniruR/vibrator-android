@@ -1,21 +1,18 @@
 @echo off
 setlocal
+REM Runs the local Gradle that build.cmd uses (8.7; the Android plugin needs 8.7+).
 set SCRIPT_DIR=%~dp0
-set GRADLE_VERSION=8.1.1
-set GRADLE_DIR=%SCRIPT_DIR%\.gradle-wrapper\gradle-%GRADLE_VERSION%
+set GRADLE_VERSION=8.7
+set GRADLE_DIR=%SCRIPT_DIR%.gradle-wrapper\gradle-%GRADLE_VERSION%
 
 if not exist "%GRADLE_DIR%\bin\gradle.bat" (
-  echo Gradle %GRADLE_VERSION% not found — downloading...
-  powershell -NoProfile -Command "
-    $u='https://services.gradle.org/distributions/gradle-%GRADLE_VERSION%-bin.zip';
-    $u=$u -replace '%GRADLE_VERSION%', '%GRADLE_VERSION%';
-    $dst=Join-Path '%SCRIPT_DIR%' '.gradle-wrapper\gradle-%GRADLE_VERSION%.zip';
-    New-Item -ItemType Directory -Path (Split-Path $dst) -Force | Out-Null;
-    Invoke-WebRequest -Uri $u -OutFile $dst -UseBasicParsing;
-    Add-Type -AssemblyName System.IO.Compression.FileSystem;
-    [System.IO.Compression.ZipFile]::ExtractToDirectory($dst, Join-Path '%SCRIPT_DIR%' '.gradle-wrapper');
-    Remove-Item $dst -Force
-  "
+  echo Gradle %GRADLE_VERSION% not found - downloading...
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "$d='%SCRIPT_DIR%.gradle-wrapper'; New-Item -ItemType Directory -Path $d -Force | Out-Null; $z=Join-Path $d 'gradle-%GRADLE_VERSION%.zip'; Invoke-WebRequest -Uri 'https://services.gradle.org/distributions/gradle-%GRADLE_VERSION%-bin.zip' -OutFile $z -UseBasicParsing; Expand-Archive -Path $z -DestinationPath $d -Force; Remove-Item $z -Force"
+  if errorlevel 1 exit /b 1
 )
 
-"%GRADLE_DIR%\bin\gradle.bat" %*
+pushd "%SCRIPT_DIR%"
+call "%GRADLE_DIR%\bin\gradle.bat" %*
+set RESULT=%ERRORLEVEL%
+popd
+exit /b %RESULT%
