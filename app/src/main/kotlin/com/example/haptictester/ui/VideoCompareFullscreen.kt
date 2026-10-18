@@ -7,6 +7,7 @@ import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,12 +17,19 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -56,6 +64,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.example.haptictester.haptic.CompareAlgorithm
 import com.example.haptictester.haptic.CompareSlotState
+import com.example.haptictester.haptic.DetectedEvent
 import com.example.haptictester.haptic.HapticMapData
 import com.example.haptictester.viewmodel.HapticViewModel
 import kotlinx.coroutines.delay
@@ -68,6 +77,7 @@ fun VideoCompareFullscreenOverlay(
     videoPlaying: Boolean,
     compareSlots: Map<CompareAlgorithm, CompareSlotState>,
     activeAlgorithm: CompareAlgorithm?,
+    detectedEvents: List<DetectedEvent>,
     onDismiss: () -> Unit,
 ) {
     val view = LocalView.current
@@ -106,6 +116,10 @@ fun VideoCompareFullscreenOverlay(
     var selectedSpeed by remember(videoPlayer) { mutableStateOf(videoPlayer.playbackParameters.speed) }
     var speedMenuExpanded by remember { mutableStateOf(false) }
     var debugVisible by remember { mutableStateOf(false) }
+    var selectedEventIds by remember { mutableStateOf(setOf<String>()) }
+    var eventPlayStartMs by remember { mutableStateOf<Long?>(null) }
+    var eventPlayUntilMs by remember { mutableStateOf<Long?>(null) }
+    var eventPlayToken by remember { mutableIntStateOf(0) }
     var controlsVisible by remember { mutableStateOf(true) }
     var interactionRevision by remember { mutableIntStateOf(0) }
     var playerDurationMs by remember(videoPlayer) { mutableStateOf(knownDurationMs(videoPlayer)) }
@@ -171,11 +185,90 @@ fun VideoCompareFullscreenOverlay(
         controlsVisible = false
     }
 
-    LaunchedEffect(videoPlaying, isScrubbing, pendingSeekTargetMs) {
+    fun selectedSpan(): Pair<Long, Long>? {
+        val chosen = detectedEvents.filter { it.id in selectedEventIds }
+        if (chosen.isEmpty()) return null
+        val start = chosen.minOf { it.startMs }.coerceAtLeast(0L)
+        val end = chosen.maxOf { it.endMs }.coerceAtLeast(start + 200L)
+        return start to end
+    }
+
+    fun playSpanOnce(startMs: Long, endMs: Long, algorithm: CompareAlgorithm?) {
+        val start = startMs.coerceAtLeast(0L)
+        val end = endMs.coerceAtLeast(start + 200L)
+        eventPlayStartMs = start
+        eventPlayUntilMs = end
+        eventPlayToken++
+        videoPlayer.pause()
+        viewModel.pauseVideo()
+        if (algorithm != null) {
+            viewModel.switchCompareSlot(algorithm, start, syncNow = false)
+        }
+        // The decoder needs a moment after a seek; starting a little early lets the
+        // picture be moving by the time the event begins.
+        val seekTo = (start - EVENT_PREROLL_MS).coerceAtLeast(0L)
+        pendingSeekTargetMs = seekTo
+        videoPlayer.seekTo(seekTo)
+        videoPlayer.playWhenReady = true
+        videoPlayer.play()
+    }
+
+    fun playWholeClip() {
+        eventPlayStartMs = null
+        eventPlayUntilMs = null
+        eventPlayToken++
+        videoPlayer.pause()
+        viewModel.pauseVideo()
+        pendingSeekTargetMs = 0L
+        videoPlayer.seekTo(0L)
+        videoPlayer.playWhenReady = true
+        videoPlayer.play()
+    }
+
+    fun toggleEvent(event: DetectedEvent) {
+        val next = if (event.id in selectedEventIds) {
+            selectedEventIds - event.id
+        } else {
+            selectedEventIds + event.id
+        }
+        selectedEventIds = next
+        eventPlayStartMs = null
+        eventPlayUntilMs = null
+        if (next.isEmpty()) {
+            playWholeClip()
+            return
+        }
+        if (!videoPlayer.isPlaying) {
+            val start = detectedEvents.filter { it.id in next }.minOf { it.startMs }.coerceAtLeast(0L)
+            viewModel.pauseVideo()
+            pendingSeekTargetMs = start
+            videoPlayer.seekTo(start)
+        }
+    }
+
+    LaunchedEffect(videoPlaying, isScrubbing, pendingSeekTargetMs, eventPlayToken) {
+        var armed = false
         while (isActive) {
             if (!isScrubbing && pendingSeekTargetMs == null) {
                 positionMs = videoPlayer.currentPosition.coerceAtLeast(0L)
-                if (videoPlaying) {
+                val until = eventPlayUntilMs
+                val start = eventPlayStartMs
+                var reachedEventEnd = false
+                if (until != null && start != null) {
+                    if (!armed && positionMs + 250L >= start) armed = true
+                    if (armed && positionMs >= until) {
+                        eventPlayStartMs = null
+                        eventPlayUntilMs = null
+                        videoPlayer.pause()
+                        viewModel.pauseVideo()
+                        positionMs = until
+                        reachedEventEnd = true
+                    }
+                }
+                if (reachedEventEnd) return@LaunchedEffect
+                // While buffering after a seek the player already reports the target
+                // time but shows the old frame, so haptics wait for real playback.
+                if (videoPlaying && videoPlayer.isPlaying) {
                     viewModel.onVideoPlaybackPosition(positionMs.toInt(), knownDurationMs(videoPlayer))
                 }
             }
@@ -314,12 +407,19 @@ fun VideoCompareFullscreenOverlay(
                                         keepControlsVisible()
                                         if (videoPlayer.isPlaying) {
                                             videoPlayer.pause()
+                                            viewModel.pauseVideo()
                                         } else {
-                                            if (videoPlayer.playbackState == Player.STATE_ENDED) {
-                                                videoPlayer.seekTo(0L)
-                                                positionMs = 0L
+                                            val span = selectedSpan()
+                                            if (span != null) {
+                                                playSpanOnce(span.first, span.second, activeAlgorithm)
+                                            } else {
+                                                if (videoPlayer.playbackState == Player.STATE_ENDED) {
+                                                    videoPlayer.seekTo(0L)
+                                                    positionMs = 0L
+                                                }
+                                                viewModel.playVideo()
+                                                videoPlayer.play()
                                             }
-                                            videoPlayer.play()
                                         }
                                     },
                                     contentPadding = PaddingValues(horizontal = 13.dp, vertical = 4.dp),
@@ -337,7 +437,12 @@ fun VideoCompareFullscreenOverlay(
                                         val onSelect = {
                                             keepControlsVisible()
                                             if (ready && !loading) {
-                                                viewModel.switchCompareSlot(algorithm, videoPlayer.currentPosition)
+                                                val span = selectedSpan()
+                                                if (span != null) {
+                                                    playSpanOnce(span.first, span.second, algorithm)
+                                                } else {
+                                                    viewModel.switchCompareSlot(algorithm, videoPlayer.currentPosition)
+                                                }
                                             }
                                         }
                                         if (selected) {
@@ -362,11 +467,14 @@ fun VideoCompareFullscreenOverlay(
             }
 
             if (debugVisible) {
-                LiveWavPatternPanel(
+                DebugSidePanel(
                     compareSlots = compareSlots,
                     positionMs = positionMs,
                     durationMs = durationMs,
-                    onTap = {
+                    events = detectedEvents,
+                    selectedEventIds = selectedEventIds,
+                    onToggleEvent = ::toggleEvent,
+                    onToggleControls = {
                         controlsVisible = !controlsVisible
                         interactionRevision++
                     },
@@ -376,6 +484,8 @@ fun VideoCompareFullscreenOverlay(
         }
     }
 }
+
+private const val EVENT_PREROLL_MS = 300L
 
 private fun knownDurationMs(player: Player): Long = player.duration.coerceAtLeast(0L)
 
@@ -391,81 +501,254 @@ private fun formatPlaybackTime(timeMs: Long): String {
     return "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
 }
 
+private fun algorithmColor(algorithm: CompareAlgorithm): Color = when (algorithm) {
+    CompareAlgorithm.A -> Color(0xFF59B7F2)
+    CompareAlgorithm.B -> Color(0xFF43C68A)
+    CompareAlgorithm.C -> Color(0xFFF2B84B)
+    CompareAlgorithm.D -> Color(0xFFED7777)
+    CompareAlgorithm.E -> Color(0xFFC9A0FF)
+}
+
 @Composable
-private fun LiveWavPatternPanel(
+private fun DebugSidePanel(
+    compareSlots: Map<CompareAlgorithm, CompareSlotState>,
+    positionMs: Long,
+    durationMs: Long,
+    events: List<DetectedEvent>,
+    selectedEventIds: Set<String>,
+    onToggleEvent: (DetectedEvent) -> Unit,
+    onToggleControls: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var tab by remember { mutableIntStateOf(0) }
+    Surface(modifier = modifier, color = Color(0xFF101720)) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                DebugTab("Live WAV", selected = tab == 0, onClick = { tab = 0 })
+                DebugTab("Events", selected = tab == 1, onClick = { tab = 1 })
+            }
+            if (tab == 0) {
+                LiveWavTab(
+                    compareSlots = compareSlots,
+                    positionMs = positionMs,
+                    durationMs = durationMs,
+                    onTap = onToggleControls,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                )
+            } else {
+                EventListTab(
+                    events = events,
+                    compareSlots = compareSlots,
+                    selectedEventIds = selectedEventIds,
+                    onToggleEvent = onToggleEvent,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DebugTab(label: String, selected: Boolean, onClick: () -> Unit) {
+    val background = if (selected) Color(0xFF2C4A63) else Color(0xFF1A2430)
+    Surface(
+        modifier = Modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(6.dp),
+        color = background,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            color = Color.White,
+            style = MaterialTheme.typography.labelMedium,
+        )
+    }
+}
+
+@Composable
+private fun LiveWavTab(
     compareSlots: Map<CompareAlgorithm, CompareSlotState>,
     positionMs: Long,
     durationMs: Long,
     onTap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier.pointerInput(Unit) {
-            detectTapGestures { onTap() }
-        },
-        color = Color(0xFF101720),
+    Column(
+        modifier = modifier.pointerInput(Unit) { detectTapGestures { onTap() } },
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        Text(
+            "${formatPlaybackTime(positionMs)} / ${formatPlaybackTime(durationMs)}",
+            color = Color.White.copy(alpha = 0.72f),
+            style = MaterialTheme.typography.labelSmall,
+        )
+        listOf(CompareAlgorithm.A, CompareAlgorithm.B, CompareAlgorithm.C, CompareAlgorithm.D).forEach { algorithm ->
+            val slot = compareSlots[algorithm]
+            val color = algorithmColor(algorithm)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "${algorithm.shortLabel} · ${algorithm.description}",
+                        color = color,
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                    if (slot?.isReady != true) {
+                        Text("No WAV", color = Color.White.copy(alpha = 0.55f), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                if (slot?.map != null) {
+                    WavEnvelopeChart(
+                        map = slot.map,
+                        positionMs = positionMs,
+                        durationMs = durationMs,
+                        color = color,
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .background(Color(0xFF080D13), RoundedCornerShape(4.dp)),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EventListTab(
+    events: List<DetectedEvent>,
+    compareSlots: Map<CompareAlgorithm, CompareSlotState>,
+    selectedEventIds: Set<String>,
+    onToggleEvent: (DetectedEvent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val chosen = events.filter { it.id in selectedEventIds }
+    val summary = when {
+        events.isEmpty() -> "No events in this folder"
+        chosen.isEmpty() -> "${events.size} events · tick the ones to play"
+        else -> {
+            val start = chosen.minOf { it.startMs }
+            val end = chosen.maxOf { it.endMs }
+            "${chosen.size} ticked · ${formatEventSpan(start, end)}"
+        }
+    }
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = summary,
+            color = Color.White.copy(alpha = 0.72f),
+            style = MaterialTheme.typography.labelSmall,
+        )
         Column(
-            modifier = Modifier.fillMaxSize().padding(10.dp),
+            modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(
-                "LIVE WAV · A–D",
-                color = Color.White,
-                style = MaterialTheme.typography.titleSmall,
-            )
-            Text(
-                "${formatPlaybackTime(positionMs)} / ${formatPlaybackTime(durationMs)}",
-                color = Color.White.copy(alpha = 0.72f),
-                style = MaterialTheme.typography.labelSmall,
-            )
+            events.forEach { event ->
+                EventRow(
+                    event = event,
+                    compareSlots = compareSlots,
+                    selected = event.id in selectedEventIds,
+                    onToggle = { onToggleEvent(event) },
+                )
+            }
+        }
+    }
+}
 
-            listOf(CompareAlgorithm.A, CompareAlgorithm.B, CompareAlgorithm.C, CompareAlgorithm.D).forEach { algorithm ->
-                val slot = compareSlots[algorithm]
-                val color = when (algorithm) {
-                    CompareAlgorithm.A -> Color(0xFF59B7F2)
-                    CompareAlgorithm.B -> Color(0xFF43C68A)
-                    CompareAlgorithm.C -> Color(0xFFF2B84B)
-                    CompareAlgorithm.D -> Color(0xFFED7777)
-                    CompareAlgorithm.E -> Color.White
-                }
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "${algorithm.shortLabel} · ${algorithm.description}",
-                            color = color,
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                        if (slot?.isReady != true) {
-                            Text("No WAV", color = Color.White.copy(alpha = 0.55f), style = MaterialTheme.typography.labelSmall)
+@Composable
+private fun EventRow(
+    event: DetectedEvent,
+    compareSlots: Map<CompareAlgorithm, CompareSlotState>,
+    selected: Boolean,
+    onToggle: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(6.dp),
+        color = if (selected) Color(0xFF24506A) else Color(0xFF18222C),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 2.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Checkbox(
+                checked = selected,
+                onCheckedChange = { onToggle() },
+                modifier = Modifier.size(32.dp),
+                colors = CheckboxDefaults.colors(
+                    checkedColor = Color(0xFF59B7F2),
+                    uncheckedColor = Color.White.copy(alpha = 0.75f),
+                    checkmarkColor = Color(0xFF101720),
+                ),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(event.label, color = Color.White, style = MaterialTheme.typography.labelMedium)
+                Text(
+                    "${formatEventSpan(event.startMs, event.endMs)} · ${event.category.ifBlank { event.id }}",
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                EVENT_PREVIEW_ALGORITHMS.forEach { algorithm ->
+                    val color = algorithmColor(algorithm)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        val map = compareSlots[algorithm]?.map
+                        if (map != null) {
+                            WavEnvelopeChart(
+                                map = map,
+                                positionMs = 0L,
+                                durationMs = map.durationMs,
+                                color = color,
+                                windowStartMs = event.startMs,
+                                windowEndMs = event.endMs,
+                                drawCursor = false,
+                                modifier = Modifier.width(28.dp).height(22.dp),
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .width(28.dp)
+                                    .height(22.dp)
+                                    .background(Color(0xFF080D13), RoundedCornerShape(3.dp)),
+                            )
                         }
-                    }
-                    if (slot?.map != null) {
-                        WavEnvelopeChart(
-                            map = slot.map,
-                            positionMs = positionMs,
-                            durationMs = durationMs,
-                            color = color,
-                            modifier = Modifier.fillMaxWidth().weight(1f),
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                                .background(Color(0xFF080D13), RoundedCornerShape(4.dp)),
-                        )
                     }
                 }
             }
         }
+    }
+}
+
+private val EVENT_PREVIEW_ALGORITHMS = listOf(
+    CompareAlgorithm.A,
+    CompareAlgorithm.B,
+    CompareAlgorithm.C,
+    CompareAlgorithm.D,
+)
+
+private fun formatEventSpan(startMs: Long, endMs: Long): String {
+    return "${formatEventSeconds(startMs)}–${formatEventSeconds(endMs)} s"
+}
+
+private fun formatEventSeconds(timeMs: Long): String {
+    val seconds = timeMs.coerceAtLeast(0L) / 1000.0
+    return if (seconds >= 60.0) {
+        val minutes = (seconds / 60.0).toInt()
+        val rest = seconds - minutes * 60.0
+        "%d:%04.1f".format(minutes, rest)
+    } else {
+        "%.1f".format(seconds)
     }
 }
 
@@ -476,27 +759,64 @@ private fun WavEnvelopeChart(
     durationMs: Long,
     color: Color,
     modifier: Modifier = Modifier,
+    windowStartMs: Long? = null,
+    windowEndMs: Long? = null,
+    drawCursor: Boolean = true,
 ) {
-    val samples = remember(map) {
-        (map.envelope.ifEmpty { map.track }).toSortedMap().entries.map { it.key to it.value }
+    val fullDuration = maxOf(durationMs, map.durationMs, 1L)
+    val rangeStart = windowStartMs ?: 0L
+    val rangeEnd = (windowEndMs ?: fullDuration).coerceAtLeast(rangeStart + 1L)
+    val columns = if (windowStartMs == null) 360 else 36
+    val bins = remember(map, rangeStart, rangeEnd, columns) {
+        cachedWaveformBins(map, rangeStart, rangeEnd, columns)
     }
     Canvas(
         modifier = modifier.background(Color(0xFF080D13), RoundedCornerShape(4.dp)),
     ) {
         val midY = size.height * 0.5f
-        val chartDuration = maxOf(durationMs, map.durationMs, 1L).toFloat()
+        val span = (rangeEnd - rangeStart).coerceAtLeast(1L).toFloat()
         drawLine(Color.White.copy(alpha = 0.14f), Offset(0f, midY), Offset(size.width, midY), 1f)
 
-        val stride = (samples.size / 450).coerceAtLeast(1)
-        for (index in samples.indices step stride) {
-            val (timeMs, rawValue) = samples[index]
-            val x = (timeMs / chartDuration * size.width).coerceIn(0f, size.width)
-            val value = rawValue.coerceIn(0, 255) / 255f
-            val topY = midY - value * size.height * 0.44f
-            drawLine(color, Offset(x, midY), Offset(x, topY), strokeWidth = 1.5f, cap = StrokeCap.Round)
+        val barWidth = (size.width / bins.size).coerceAtLeast(1.5f)
+        for (column in bins.indices) {
+            val value = bins[column]
+            if (value <= 0f) continue
+            val x = (column + 0.5f) / bins.size * size.width
+            val topY = midY - value * size.height * 0.46f
+            drawLine(color, Offset(x, midY), Offset(x, topY), strokeWidth = barWidth, cap = StrokeCap.Round)
         }
 
-        val cursorX = (positionMs.coerceAtLeast(0L) / chartDuration * size.width).coerceIn(0f, size.width)
-        drawLine(Color.White, Offset(cursorX, 0f), Offset(cursorX, size.height), strokeWidth = 1.5f)
+        if (drawCursor) {
+            val cursorX = ((positionMs.coerceAtLeast(0L) - rangeStart).coerceAtLeast(0L) / span * size.width)
+                .coerceIn(0f, size.width)
+            drawLine(Color.White, Offset(cursorX, 0f), Offset(cursorX, size.height), strokeWidth = 1.5f)
+        }
     }
+}
+
+private val waveformBinCache = object : LinkedHashMap<String, FloatArray>(128, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, FloatArray>?): Boolean = size > 240
+}
+
+private fun cachedWaveformBins(map: HapticMapData, startMs: Long, endMs: Long, columns: Int): FloatArray {
+    val key = "${System.identityHashCode(map)}|$startMs|$endMs|$columns"
+    synchronized(waveformBinCache) {
+        waveformBinCache[key]?.let { return it }
+        val bins = buildWaveformBins(map, startMs, endMs, columns)
+        waveformBinCache[key] = bins
+        return bins
+    }
+}
+
+private fun buildWaveformBins(map: HapticMapData, startMs: Long, endMs: Long, columns: Int): FloatArray {
+    val bins = FloatArray(columns.coerceAtLeast(1))
+    val span = (endMs - startMs).coerceAtLeast(1L).toFloat()
+    val samples = map.envelope.ifEmpty { map.track }
+    for ((timeMs, rawValue) in samples) {
+        if (timeMs < startMs || timeMs > endMs) continue
+        val column = (((timeMs - startMs) / span) * bins.size).toInt().coerceIn(0, bins.lastIndex)
+        val value = rawValue.coerceIn(0, 255) / 255f
+        if (value > bins[column]) bins[column] = value
+    }
+    return bins
 }

@@ -18,6 +18,8 @@ import com.example.haptictester.haptic.AudioHapticController
 import com.example.haptictester.haptic.AudioHapticController.HapticPulseDebug
 import com.example.haptictester.haptic.CompareAlgorithm
 import com.example.haptictester.haptic.CompareSlotState
+import com.example.haptictester.haptic.DetectedEvent
+import com.example.haptictester.haptic.DetectedEvents
 import com.example.haptictester.haptic.HapticFolderMatcher
 import com.example.haptictester.haptic.HapticController
 import com.example.haptictester.haptic.HapticTrackFormat
@@ -143,6 +145,9 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _folderSummary = MutableStateFlow<String?>(null)
     val folderSummary = _folderSummary.asStateFlow()
+
+    private val _detectedEvents = MutableStateFlow<List<DetectedEvent>>(emptyList())
+    val detectedEvents = _detectedEvents.asStateFlow()
 
     init {
         pushAudioTuning()
@@ -273,6 +278,13 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
                         loadCompareSlot(algorithm, Uri.fromFile(wav))
                     }
                 }
+                _detectedEvents.value = withContext(Dispatchers.IO) {
+                    runCatching {
+                        app.assets.open("demo/events.json").bufferedReader().use { reader ->
+                            DetectedEvents.parse(reader.readText())
+                        }
+                    }.getOrDefault(emptyList())
+                }
             } catch (throwable: Throwable) {
                 _videoError.value = throwable.message ?: throwable.toString()
             }
@@ -284,10 +296,16 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             try {
                 takePersistableTreePermission(app, treeUri)
-                val children = withContext(Dispatchers.IO) {
+                val (children, events) = withContext(Dispatchers.IO) {
                     val root = DocumentFile.fromTreeUri(app, treeUri)
                         ?: throw IllegalArgumentException("Unable to open the selected folder")
-                    root.listFiles().filter { it.isFile && !it.name.isNullOrBlank() }
+                    val files = root.listFiles().filter { it.isFile && !it.name.isNullOrBlank() }
+                    val events = findEventsJson(root)?.let { file ->
+                        app.contentResolver.openInputStream(file.uri)?.bufferedReader()?.use { reader ->
+                            DetectedEvents.parse(reader.readText())
+                        }
+                    }.orEmpty()
+                    files to events
                 }
                 val byName = children.associateBy { it.name!! }
                 val match = HapticFolderMatcher.match(byName.keys.toList())
@@ -309,11 +327,32 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
                     val uri = byName[name]?.uri ?: continue
                     loadCompareSlot(algorithm, uri)
                 }
+                _detectedEvents.value = events
             } catch (throwable: Throwable) {
                 _folderSummary.value = null
                 _videoError.value = throwable.message ?: throwable.toString()
             }
         }
+    }
+
+    private fun findEventsJson(root: DocumentFile): DocumentFile? {
+        val pending = ArrayDeque<DocumentFile>()
+        pending.add(root)
+        var fallback: DocumentFile? = null
+        while (pending.isNotEmpty()) {
+            val current = pending.removeFirst()
+            for (child in current.listFiles()) {
+                if (child.isDirectory) {
+                    pending.add(child)
+                    continue
+                }
+                if (!child.name.equals("events.json", ignoreCase = true)) continue
+                val location = child.uri.toString()
+                if (location.contains("context_detector")) return child
+                if (fallback == null) fallback = child
+            }
+        }
+        return fallback
     }
 
     private fun takePersistableTreePermission(app: Application, uri: Uri) {
@@ -355,6 +394,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         loadedVideoUri = uri
         _selectedVideoName.value = resolveDisplayName(app, uri)
         _videoError.value = null
+        _detectedEvents.value = emptyList()
         takePersistableReadPermission(app, uri)
     }
 
@@ -411,14 +451,14 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun switchCompareSlot(algorithm: CompareAlgorithm, positionMs: Long) {
+    fun switchCompareSlot(algorithm: CompareAlgorithm, positionMs: Long, syncNow: Boolean = true) {
         val slot = _compareSlots.value[algorithm] ?: return
         if (slot.map == null) {
             _videoError.value = "Load algorithm ${algorithm.shortLabel} WAV first."
             return
         }
         _activeCompareAlgorithm.value = algorithm
-        applyCompareSlot(algorithm, seekPositionMs = positionMs)
+        applyCompareSlot(algorithm, seekPositionMs = if (syncNow) positionMs else null)
         _videoError.value = null
     }
 

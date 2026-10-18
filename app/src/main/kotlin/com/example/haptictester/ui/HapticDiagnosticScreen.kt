@@ -116,6 +116,7 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val activeCompareAlgorithm by viewModel.activeCompareAlgorithm.collectAsState()
     val demoVideoUri by viewModel.demoVideoUri.collectAsState()
     val folderSummary by viewModel.folderSummary.collectAsState()
+    val detectedEvents by viewModel.detectedEvents.collectAsState()
 
     // Library Feature States
     val libraryViewModel: HapticLibraryViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
@@ -401,6 +402,7 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                 videoPlaying = videoPlaying,
                 compareSlots = compareSlots,
                 activeAlgorithm = activeCompareAlgorithm,
+                detectedEvents = detectedEvents,
                 onDismiss = { isVideoFullscreen = false },
             )
         }
