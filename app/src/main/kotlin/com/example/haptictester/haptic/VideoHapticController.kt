@@ -29,8 +29,9 @@ class VideoHapticController(
         const val BED_MIN_AMPLITUDE = 24
         const val BED_SCALE = 0.55f
         const val BED_BUCKET_SIZE = 24
-        const val BED_HOLD_MS = 4_500L
-        const val BED_REFRESH_MS = 4_000L
+        const val BED_CHUNK_MS = 10_000L
+        const val BED_RESYNC_LEAD_MS = 1_000L
+        const val BED_DRIFT_MS = 80L
     }
 
     private data class WavAccent(
@@ -50,8 +51,16 @@ class VideoHapticController(
     private var accents: List<WavAccent> = emptyList()
     private var nextAccentIndex = 0
     private var accentHoldUntilMs = Long.MIN_VALUE
-    private var bedBucket = -1
-    private var lastBedRefreshMs = 0L
+
+    // The bed between accents is planned per window and played as one waveform.
+    // Sampling it from the 20 ms position poll picked a different window, and so
+    // a different level, on every play of a busy track.
+    private var bedPlan: IntArray? = null
+    private var bedPlanCap = -1
+    private var bedStartPositionMs = Long.MIN_VALUE
+    private var bedStartElapsedMs = 0L
+    private var bedEndPositionMs = Long.MIN_VALUE
+    private var bedChunkLimited = false
 
     fun loadWav(uri: Uri): String {
         val map = WavHapticParser.parse(context, uri)
@@ -92,8 +101,13 @@ class VideoHapticController(
                 stopBed()
                 val waveform = accentWaveform(nextAccent, cap, windowSizeMs)
                 val delayMs = (nextAccent.fireAtMs - position).coerceAtLeast(0L)
-                accentHoldUntilMs = nextAccent.endMs
+                // The bed must not cut an accent short, so hold for the whole pattern.
+                accentHoldUntilMs = maxOf(nextAccent.endMs, nextAccent.fireAtMs + waveform.first.sum())
                 val runnable = Runnable {
+                    scheduledRunnable = null
+                    // Firing cancels whatever bed waveform is playing; restart it after the hold.
+                    bedStartPositionMs = Long.MIN_VALUE
+                    bedEndPositionMs = Long.MIN_VALUE
                     hapticController.vibrateAccentPattern(waveform.first, waveform.second)
                     Log.d(
                         tag,
@@ -111,20 +125,11 @@ class VideoHapticController(
         }
 
         if (position <= accentHoldUntilMs) return
+        // A jump in the reported position can pass the hold before the accent fires.
+        if (scheduledRunnable != null) return
         accentHoldUntilMs = Long.MIN_VALUE
 
-        val sourceIntensity = map.track[windowStartMs]?.coerceIn(0, 255) ?: 0
-        val level = minOf(
-            (sourceIntensity * BED_SCALE).roundToInt(),
-            BED_MAX_AMPLITUDE,
-            amplitudeCap.coerceIn(0, 255),
-        )
-        if (level < BED_MIN_AMPLITUDE) {
-            stopBed()
-            return
-        }
-
-        updateBed(level)
+        updateBed(map, position, amplitudeCap.coerceIn(0, 255))
     }
 
     private fun detectAccents(map: HapticMapData): List<WavAccent> {
@@ -247,29 +252,127 @@ class VideoHapticController(
         return timings.toLongArray() to amplitudes.toIntArray()
     }
 
-    private fun updateBed(level: Int) {
-        val bucket = level / BED_BUCKET_SIZE
-        val now = SystemClock.elapsedRealtime()
-        if (bucket == bedBucket && now - lastBedRefreshMs < BED_REFRESH_MS) return
-        bedBucket = bucket
-        lastBedRefreshMs = now
-        if (hapticController.hasAmplitudeControl()) {
-            hapticController.vibrateOneShot(BED_HOLD_MS, level)
-            return
+    private fun updateBed(map: HapticMapData, positionMs: Long, amplitudeCap: Int) {
+        if (bedPlan == null || bedPlanCap != amplitudeCap) {
+            bedPlan = buildBedPlan(map, amplitudeCap)
+            bedPlanCap = amplitudeCap
+            bedStartPositionMs = Long.MIN_VALUE
         }
 
-        val onMs = ((level / 255.0) * PWM_PERIOD_MS).toLong().coerceIn(4L, PWM_PERIOD_MS - 4L)
+        if (bedStartPositionMs != Long.MIN_VALUE) {
+            val expectedMs = bedStartPositionMs + (SystemClock.elapsedRealtime() - bedStartElapsedMs)
+            val inSync = kotlin.math.abs(positionMs - expectedMs) <= BED_DRIFT_MS
+            val nearEnd = bedChunkLimited && positionMs >= bedEndPositionMs - BED_RESYNC_LEAD_MS
+            if (inSync && !nearEnd) return
+        }
+
+        startBedAt(map, positionMs)
+    }
+
+    /**
+     * Bed level per window, 0 where it is off. Same rules as sampling the poll
+     * (scale, floor, and a new level only when its bucket changes), applied to
+     * every window in order and silent wherever an accent owns the motor.
+     */
+    private fun buildBedPlan(map: HapticMapData, amplitudeCap: Int): IntArray {
+        val windowSizeMs = map.windowSizeMs.coerceAtLeast(1L)
+        val windowCount = ((map.durationMs + windowSizeMs - 1) / windowSizeMs).toInt().coerceAtLeast(1)
+        val plan = IntArray(windowCount)
+        var accentIndex = 0
+        var bucket = -1
+        var heldLevel = 0
+        for (index in 0 until windowCount) {
+            val startMs = index * windowSizeMs
+            while (accentIndex < accents.size && accents[accentIndex].endMs < startMs) accentIndex++
+            val accent = accents.getOrNull(accentIndex)
+            val inAccent = accent != null &&
+                startMs >= accent.fireAtMs - ACCENT_LOOKAHEAD_MS &&
+                startMs <= accent.endMs
+            if (inAccent) {
+                bucket = -1
+                continue
+            }
+            val source = map.track[startMs]?.coerceIn(0, 255) ?: 0
+            val level = minOf((source * BED_SCALE).roundToInt(), BED_MAX_AMPLITUDE, amplitudeCap)
+            if (level < BED_MIN_AMPLITUDE) {
+                bucket = -1
+                continue
+            }
+            val levelBucket = level / BED_BUCKET_SIZE
+            if (levelBucket != bucket) {
+                bucket = levelBucket
+                heldLevel = level
+            }
+            plan[index] = heldLevel
+        }
+        return plan
+    }
+
+    private fun startBedAt(map: HapticMapData, positionMs: Long) {
+        val plan = bedPlan ?: return
+        val windowSizeMs = map.windowSizeMs.coerceAtLeast(1L)
+        val nextAccent = accents.getOrNull(nextAccentIndex)
+        val accentLimitMs = nextAccent?.let { it.fireAtMs - ACCENT_LOOKAHEAD_MS } ?: Long.MAX_VALUE
+        val chunkEndMs = positionMs + BED_CHUNK_MS
+        val endMs = minOf(map.durationMs, accentLimitMs, chunkEndMs)
+        val amplitudeControl = hapticController.hasAmplitudeControl()
+
+        val timings = ArrayList<Long>()
+        val amplitudes = ArrayList<Int>()
+        fun append(durationMs: Long, amplitude: Int) {
+            if (durationMs <= 0L) return
+            val last = amplitudes.lastIndex
+            if (last >= 0 && amplitudes[last] == amplitude) {
+                timings[last] = timings[last] + durationMs
+            } else {
+                timings += durationMs
+                amplitudes += amplitude
+            }
+        }
+
+        var cursorMs = positionMs
+        var index = (positionMs / windowSizeMs).toInt()
+        while (cursorMs < endMs) {
+            val windowStartMs = index * windowSizeMs
+            val windowEndMs = minOf(windowStartMs + windowSizeMs, endMs)
+            val level = plan.getOrNull(index) ?: 0
+            if (level <= 0) {
+                append(windowEndMs - cursorMs, 0)
+            } else if (amplitudeControl) {
+                append(windowEndMs - cursorMs, level)
+            } else {
+                val onMs = ((level / 255.0) * PWM_PERIOD_MS).toLong().coerceIn(4L, PWM_PERIOD_MS - 4L)
+                val onEndMs = minOf(windowStartMs + onMs, windowEndMs)
+                if (cursorMs < onEndMs) {
+                    append(onEndMs - cursorMs, 255)
+                    cursorMs = onEndMs
+                }
+                append(windowEndMs - cursorMs, 0)
+            }
+            cursorMs = windowEndMs
+            index++
+        }
+
+        bedStartPositionMs = positionMs
+        bedStartElapsedMs = SystemClock.elapsedRealtime()
+        bedEndPositionMs = endMs
+        bedChunkLimited = endMs == chunkEndMs && chunkEndMs < minOf(map.durationMs, accentLimitMs)
+
+        if (amplitudes.none { it > 0 }) {
+            hapticController.cancel()
+            return
+        }
         hapticController.vibrateWaveform(
-            timings = longArrayOf(0L, onMs, PWM_PERIOD_MS - onMs),
-            amplitudes = intArrayOf(0, 255, 0),
-            repeat = 0,
+            timings = longArrayOf(0L) + timings.toLongArray(),
+            amplitudes = intArrayOf(0) + amplitudes.toIntArray(),
+            repeat = -1,
         )
     }
 
     private fun stopBed() {
-        if (bedBucket < 0) return
-        bedBucket = -1
-        lastBedRefreshMs = 0L
+        if (bedStartPositionMs == Long.MIN_VALUE) return
+        bedStartPositionMs = Long.MIN_VALUE
+        bedEndPositionMs = Long.MIN_VALUE
         hapticController.cancel()
     }
 
@@ -300,6 +403,8 @@ class VideoHapticController(
         hapticMap = map
         mapLabel = label
         accents = detectAccents(map)
+        bedPlan = null
+        bedPlanCap = -1
         resetPlaybackState()
         val activeWindows = map.track.values.count { it > 0 }
         Log.d(
@@ -312,8 +417,8 @@ class VideoHapticController(
     private fun resetPlaybackState(positionMs: Long? = null) {
         lastWindowStartMs = Long.MIN_VALUE
         accentHoldUntilMs = Long.MIN_VALUE
-        bedBucket = -1
-        lastBedRefreshMs = 0L
+        bedStartPositionMs = Long.MIN_VALUE
+        bedEndPositionMs = Long.MIN_VALUE
         hapticController.cancel()
         nextAccentIndex = if (positionMs == null) {
             0

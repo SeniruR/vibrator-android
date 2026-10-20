@@ -485,7 +485,7 @@ fun VideoCompareFullscreenOverlay(
     }
 }
 
-private const val EVENT_PREROLL_MS = 300L
+private const val EVENT_PREROLL_MS = 500L
 
 private fun knownDurationMs(player: Player): Long = player.duration.coerceAtLeast(0L)
 
