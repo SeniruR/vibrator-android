@@ -23,6 +23,7 @@ import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.URLDecoder
 import java.security.MessageDigest
 import java.security.SecureRandom
 
@@ -43,11 +44,18 @@ sealed interface RemoteSyncCommand {
     data class SelectAlgorithm(val algorithmId: String) : RemoteSyncCommand
     data class ToggleEvent(val eventId: String) : RemoteSyncCommand
     data class SetSelectedEvents(val eventIds: Set<String>) : RemoteSyncCommand
+    data class LoadBundle(val bundleId: String) : RemoteSyncCommand
+    data class UpdateDesktopLibrary(val bundles: List<String>) : RemoteSyncCommand
+    data object ClearMedia : RemoteSyncCommand
     data object RequestState : RemoteSyncCommand
 }
 
 class DesktopSyncServer(
     private val onCommand: (RemoteSyncCommand) -> Unit,
+    private val onReceiveFile: ((bundleId: String, fileName: String, contentLength: Long, input: InputStream) -> Result<Unit>)? = null,
+    private val onFinishBundleUpload: ((bundleId: String, autoLoad: Boolean) -> Result<Unit>)? = null,
+    private val onGetBundleManifest: ((bundleId: String) -> Result<JSONArray>)? = null,
+    private val onOpenBundleFileStream: ((bundleId: String, fileName: String) -> Result<Pair<Long, InputStream>>)? = null,
 ) {
     companion object {
         const val DEFAULT_PORT = 8765
@@ -201,28 +209,8 @@ class DesktopSyncServer(
 
             val firstLine = requestLines[0]
             val parts = firstLine.split(" ")
+            val method = parts.getOrNull(0)?.uppercase() ?: "GET"
             val path = parts.getOrNull(1) ?: "/"
-
-            // Lightweight discovery ping for Desktop "Auto-Find Phone"
-            if (path.startsWith("/discover")) {
-                val body = JSONObject()
-                    .put("app", "vibrator-android")
-                    .put("version", 1)
-                    .toString()
-                val bodyBytes = body.toByteArray(Charsets.UTF_8)
-                val response = buildString {
-                    append("HTTP/1.1 200 OK\r\n")
-                    append("Content-Type: application/json\r\n")
-                    append("Access-Control-Allow-Origin: *\r\n")
-                    append("Content-Length: ${bodyBytes.size}\r\n")
-                    append("Connection: close\r\n\r\n")
-                }.toByteArray(Charsets.UTF_8)
-                output.write(response)
-                output.write(bodyBytes)
-                output.flush()
-                socket.close()
-                return
-            }
 
             val headers = mutableMapOf<String, String>()
             for (i in 1 until requestLines.size) {
@@ -233,6 +221,237 @@ class DesktopSyncServer(
                     val value = line.substring(colon + 1).trim()
                     headers[key] = value
                 }
+            }
+
+            if (method == "OPTIONS") {
+                sendHttpJsonResponse(output, 200, JSONObject().put("ok", true))
+                socket.close()
+                return
+            }
+
+            // Lightweight discovery ping for Desktop "Auto-Find Phone"
+            if (path.startsWith("/discover")) {
+                val body = JSONObject()
+                    .put("app", "vibrator-android")
+                    .put("version", 2)
+                sendHttpJsonResponse(output, 200, body)
+                socket.close()
+                return
+            }
+
+            // Phase 3: Wireless file upload endpoint (POST /upload-file?pin=XXXX&bundleId=...&fileName=...)
+            if (path.startsWith("/upload-file") && method == "POST") {
+                val providedPin = parseQueryParam(path, "pin")
+                if (providedPin != expectedPin) {
+                    sendHttpJsonResponse(
+                        output,
+                        401,
+                        JSONObject().put("ok", false).put("error", "Invalid 4-digit PIN"),
+                    )
+                    socket.close()
+                    return
+                }
+                val rawBundleId = parseQueryParam(path, "bundleId").orEmpty()
+                val rawFileName = parseQueryParam(path, "fileName").orEmpty()
+                val bundleId = sanitizeSegment(rawBundleId)
+                val fileName = sanitizeSegment(rawFileName)
+                val contentLength = headers["content-length"]?.toLongOrNull() ?: -1L
+
+                if (bundleId.isEmpty() || fileName.isEmpty() || contentLength < 0L) {
+                    sendHttpJsonResponse(
+                        output,
+                        400,
+                        JSONObject().put("ok", false).put("error", "Missing bundleId, fileName, or Content-Length"),
+                    )
+                    socket.close()
+                    return
+                }
+
+                socket.soTimeout = 60_000 // Allow 60s per read during large video file transfer
+                val handler = onReceiveFile
+                val result = if (handler != null) {
+                    handler(bundleId, fileName, contentLength, input)
+                } else {
+                    Result.failure(IllegalStateException("File receiver not configured"))
+                }
+
+                if (result.isSuccess) {
+                    sendHttpJsonResponse(
+                        output,
+                        200,
+                        JSONObject().put("ok", true).put("bundleId", bundleId).put("fileName", fileName),
+                    )
+                } else {
+                    sendHttpJsonResponse(
+                        output,
+                        500,
+                        JSONObject()
+                            .put("ok", false)
+                            .put("error", result.exceptionOrNull()?.message ?: "Upload failed"),
+                    )
+                }
+                socket.close()
+                return
+            }
+
+            // Phase 3: Complete bundle upload & optionally trigger load on Android (POST /finish-bundle?pin=XXXX&bundleId=...&autoLoad=...)
+            if (path.startsWith("/finish-bundle") && method == "POST") {
+                val providedPin = parseQueryParam(path, "pin")
+                if (providedPin != expectedPin) {
+                    sendHttpJsonResponse(
+                        output,
+                        401,
+                        JSONObject().put("ok", false).put("error", "Invalid 4-digit PIN"),
+                    )
+                    socket.close()
+                    return
+                }
+                val bundleId = sanitizeSegment(parseQueryParam(path, "bundleId").orEmpty())
+                val autoLoadParam = parseQueryParam(path, "autoLoad")?.lowercase()
+                val autoLoad = autoLoadParam != "false" && autoLoadParam != "0"
+                if (bundleId.isEmpty()) {
+                    sendHttpJsonResponse(
+                        output,
+                        400,
+                        JSONObject().put("ok", false).put("error", "Missing bundleId"),
+                    )
+                    socket.close()
+                    return
+                }
+                val handler = onFinishBundleUpload
+                val result = if (handler != null) {
+                    handler(bundleId, autoLoad)
+                } else {
+                    Result.success(Unit)
+                }
+                if (result.isSuccess) {
+                    sendHttpJsonResponse(output, 200, JSONObject().put("ok", true).put("bundleId", bundleId))
+                } else {
+                    sendHttpJsonResponse(
+                        output,
+                        500,
+                        JSONObject()
+                            .put("ok", false)
+                            .put("error", result.exceptionOrNull()?.message ?: "Failed to finalize bundle"),
+                    )
+                }
+                socket.close()
+                return
+            }
+
+            // Phase 3: Get bundle file manifest for Phone -> PC sync (GET /bundle-manifest?pin=XXXX&bundleId=...)
+            if (path.startsWith("/bundle-manifest") && method == "GET") {
+                val providedPin = parseQueryParam(path, "pin")
+                if (providedPin != expectedPin) {
+                    sendHttpJsonResponse(
+                        output,
+                        401,
+                        JSONObject().put("ok", false).put("error", "Invalid 4-digit PIN"),
+                    )
+                    socket.close()
+                    return
+                }
+                val bundleId = sanitizeSegment(parseQueryParam(path, "bundleId").orEmpty())
+                if (bundleId.isEmpty()) {
+                    sendHttpJsonResponse(
+                        output,
+                        400,
+                        JSONObject().put("ok", false).put("error", "Missing bundleId"),
+                    )
+                    socket.close()
+                    return
+                }
+                val handler = onGetBundleManifest
+                val result = if (handler != null) {
+                    handler(bundleId)
+                } else {
+                    Result.failure(IllegalStateException("Manifest provider not configured"))
+                }
+                if (result.isSuccess) {
+                    sendHttpJsonResponse(
+                        output,
+                        200,
+                        JSONObject()
+                            .put("ok", true)
+                            .put("bundleId", bundleId)
+                            .put("files", result.getOrThrow()),
+                    )
+                } else {
+                    sendHttpJsonResponse(
+                        output,
+                        404,
+                        JSONObject()
+                            .put("ok", false)
+                            .put("error", result.exceptionOrNull()?.message ?: "Bundle not found"),
+                    )
+                }
+                socket.close()
+                return
+            }
+
+            // Phase 3: Download a file from Phone Library to PC (GET /download-file?pin=XXXX&bundleId=...&fileName=...)
+            if (path.startsWith("/download-file") && method == "GET") {
+                val providedPin = parseQueryParam(path, "pin")
+                if (providedPin != expectedPin) {
+                    sendHttpJsonResponse(
+                        output,
+                        401,
+                        JSONObject().put("ok", false).put("error", "Invalid 4-digit PIN"),
+                    )
+                    socket.close()
+                    return
+                }
+                val bundleId = sanitizeSegment(parseQueryParam(path, "bundleId").orEmpty())
+                val fileName = sanitizeSegment(parseQueryParam(path, "fileName").orEmpty())
+                if (bundleId.isEmpty() || fileName.isEmpty()) {
+                    sendHttpJsonResponse(
+                        output,
+                        400,
+                        JSONObject().put("ok", false).put("error", "Missing bundleId or fileName"),
+                    )
+                    socket.close()
+                    return
+                }
+                socket.soTimeout = 60_000
+                val handler = onOpenBundleFileStream
+                val result = if (handler != null) {
+                    handler(bundleId, fileName)
+                } else {
+                    Result.failure(IllegalStateException("Download provider not configured"))
+                }
+                if (result.isFailure) {
+                    sendHttpJsonResponse(
+                        output,
+                        404,
+                        JSONObject()
+                            .put("ok", false)
+                            .put("error", result.exceptionOrNull()?.message ?: "File not found"),
+                    )
+                    socket.close()
+                    return
+                }
+                val (fileSize, fileInput) = result.getOrThrow()
+                fileInput.use { stream ->
+                    val respHeaders = buildString {
+                        append("HTTP/1.1 200 OK\r\n")
+                        append("Content-Type: application/octet-stream\r\n")
+                        append("Access-Control-Allow-Origin: *\r\n")
+                        if (fileSize >= 0L) {
+                            append("Content-Length: $fileSize\r\n")
+                        }
+                        append("Connection: close\r\n\r\n")
+                    }.toByteArray(Charsets.UTF_8)
+                    output.write(respHeaders)
+                    val buf = ByteArray(64 * 1024)
+                    while (true) {
+                        val read = stream.read(buf)
+                        if (read <= 0) break
+                        output.write(buf, 0, read)
+                    }
+                    output.flush()
+                }
+                socket.close()
+                return
             }
 
             val wsKey = headers["sec-websocket-key"]
@@ -370,10 +589,59 @@ class DesktopSyncServer(
                 }
                 onCommand(RemoteSyncCommand.SetSelectedEvents(ids))
             }
+            "COMMAND_LOAD_BUNDLE" -> {
+                val bundleId = sanitizeSegment(obj.optString("bundleId").trim())
+                if (bundleId.isNotEmpty()) {
+                    onCommand(RemoteSyncCommand.LoadBundle(bundleId))
+                }
+            }
+            "COMMAND_CLEAR_MEDIA" -> {
+                onCommand(RemoteSyncCommand.ClearMedia)
+            }
+            "COMMAND_DESKTOP_LIBRARY" -> {
+                val arr: JSONArray? = obj.optJSONArray("bundles")
+                val list = mutableListOf<String>()
+                if (arr != null) {
+                    for (i in 0 until arr.length()) {
+                        val b = sanitizeSegment(arr.optString(i).trim())
+                        if (b.isNotEmpty()) list += b
+                    }
+                }
+                onCommand(RemoteSyncCommand.UpdateDesktopLibrary(list))
+            }
             "REQUEST_STATE" -> {
                 onCommand(RemoteSyncCommand.RequestState)
             }
         }
+    }
+
+    private fun sendHttpJsonResponse(output: OutputStream, statusCode: Int, json: JSONObject) {
+        val statusText = when (statusCode) {
+            200 -> "OK"
+            400 -> "Bad Request"
+            401 -> "Unauthorized"
+            else -> "Internal Server Error"
+        }
+        val bodyBytes = json.toString().toByteArray(Charsets.UTF_8)
+        val headers = buildString {
+            append("HTTP/1.1 $statusCode $statusText\r\n")
+            append("Content-Type: application/json; charset=utf-8\r\n")
+            append("Access-Control-Allow-Origin: *\r\n")
+            append("Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n")
+            append("Access-Control-Allow-Headers: *\r\n")
+            append("Content-Length: ${bodyBytes.size}\r\n")
+            append("Connection: close\r\n\r\n")
+        }.toByteArray(Charsets.UTF_8)
+        output.write(headers)
+        output.write(bodyBytes)
+        output.flush()
+    }
+
+    private fun sanitizeSegment(raw: String): String {
+        return raw.trim()
+            .replace('\\', '_')
+            .replace('/', '_')
+            .replace("..", "_")
     }
 
     private fun sendTextFrame(text: String) {
@@ -502,7 +770,9 @@ class DesktopSyncServer(
             if (eq > 0) {
                 val k = pair.substring(0, eq)
                 val v = pair.substring(eq + 1)
-                if (k == key) return v
+                if (k == key) {
+                    return runCatching { URLDecoder.decode(v, "UTF-8") }.getOrDefault(v)
+                }
             }
         }
         return null

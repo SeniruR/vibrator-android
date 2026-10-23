@@ -332,6 +332,23 @@ fun VideoCompareFullscreenOverlay(
                     viewModel.setSelectedEventIds(command.eventIds, broadcast = true)
                     applyEventSelectionAfterChange(viewModel.selectedEventIds.value)
                 }
+                is RemoteSyncCommand.LoadBundle -> {
+                    eventPlayStartMs = null
+                    eventPlayUntilMs = null
+                    videoPlayer.pause()
+                    viewModel.pauseVideo()
+                    viewModel.loadBundleById(command.bundleId)
+                }
+                RemoteSyncCommand.ClearMedia -> {
+                    eventPlayStartMs = null
+                    eventPlayUntilMs = null
+                    videoPlayer.pause()
+                    viewModel.pauseVideo()
+                    viewModel.clearLoadedMedia(broadcastToDesktop = false)
+                }
+                is RemoteSyncCommand.UpdateDesktopLibrary -> {
+                    viewModel.setDesktopLibraryBundles(command.bundles)
+                }
                 RemoteSyncCommand.RequestState -> {
                     viewModel.notifyPlayerStateChanged(
                         positionMs = videoPlayer.currentPosition.coerceAtLeast(0L),
