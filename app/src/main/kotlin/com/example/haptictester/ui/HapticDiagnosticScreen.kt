@@ -121,6 +121,11 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val detectedEvents by viewModel.detectedEvents.collectAsState()
     val selectedEventIds by viewModel.selectedEventIds.collectAsState()
     val syncStatus by viewModel.syncStatus.collectAsState()
+    val syncRootFolderName by viewModel.syncRootFolderName.collectAsState()
+    val activeBundleId by viewModel.activeBundleId.collectAsState()
+    val availableBundles by viewModel.availableBundles.collectAsState()
+    val desktopLibraryBundles by viewModel.desktopLibraryBundles.collectAsState()
+    val transferStatus by viewModel.transferStatus.collectAsState()
 
     // Library Feature States
     val libraryViewModel: HapticLibraryViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
@@ -174,14 +179,23 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val openFolderLauncher = rememberLauncherForActivityResult(OpenDocumentTree()) { uri ->
         if (uri != null) viewModel.loadFolder(uri)
     }
+    val openSyncRootLauncher = rememberLauncherForActivityResult(OpenDocumentTree()) { uri ->
+        if (uri != null) viewModel.setSyncStorageFolder(uri)
+    }
     val permissionLauncher = rememberLauncherForActivityResult(RequestPermission()) { /* handled in UI */ }
+
+    val libraryFolderPickRequest by viewModel.libraryFolderPickRequest.collectAsState()
+    LaunchedEffect(libraryFolderPickRequest) {
+        if (libraryFolderPickRequest > 0) {
+            openSyncRootLauncher.launch(null)
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.loadBundledDemo()
     }
     LaunchedEffect(demoVideoUri) {
-        val uri = demoVideoUri ?: return@LaunchedEffect
-        loadedVideoUri = uri
+        loadedVideoUri = demoVideoUri
     }
 
     val hasCompareReady = compareSlots.values.any { it.isReady }
@@ -346,6 +360,26 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                         viewModel.notifyPlayerStateChanged(positionMs = start, durationMs = videoDurationMs)
                     }
                 }
+                is RemoteSyncCommand.LoadBundle -> {
+                    eventPlayStartMs = null
+                    eventPlayUntilMs = null
+                    videoPlayer.pause()
+                    viewModel.pauseVideo()
+                    viewModel.loadBundleById(command.bundleId)
+                }
+                is RemoteSyncCommand.ClearMedia -> {
+                    eventPlayStartMs = null
+                    eventPlayUntilMs = null
+                    videoPlayer.stop()
+                    videoPlayer.clearMediaItems()
+                    loadedVideoUri = null
+                    videoPrepared = false
+                    videoDurationMs = 0L
+                    viewModel.clearLoadedMedia(broadcastToDesktop = false)
+                }
+                is RemoteSyncCommand.UpdateDesktopLibrary -> {
+                    viewModel.setDesktopLibraryBundles(command.bundles)
+                }
                 RemoteSyncCommand.RequestState -> {
                     viewModel.notifyPlayerStateChanged(
                         positionMs = videoPlayer.currentPosition.coerceAtLeast(0L),
@@ -384,14 +418,16 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     }
 
     LaunchedEffect(loadedVideoUri) {
-        val uri = loadedVideoUri ?: return@LaunchedEffect
+        val uri = loadedVideoUri
         videoPlayer.stop()
         videoPlayer.clearMediaItems()
-        videoPlayer.setMediaItem(MediaItem.fromUri(uri))
-        videoPlayer.prepare()
         videoPrepared = false
         videoDurationMs = 0L
         videoPlayer.playWhenReady = false
+        if (uri != null) {
+            videoPlayer.setMediaItem(MediaItem.fromUri(uri))
+            videoPlayer.prepare()
+        }
     }
 
     val durationMismatch = videoDurationMs > 0L &&
@@ -442,9 +478,12 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                 DesktopSyncCard(
                     status = syncStatus,
                     selectedEventCount = selectedEventIds.size,
+                    syncRootFolderName = syncRootFolderName,
+                    transferStatus = transferStatus,
                     onStartSync = { viewModel.startDesktopSync() },
                     onStopSync = { viewModel.stopDesktopSync() },
                     onRefreshIps = { viewModel.refreshSyncIps() },
+                    onSelectSyncFolder = { openSyncRootLauncher.launch(null) },
                 )
 
                 IntensityCapCard(
@@ -506,7 +545,10 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                             isVideoFullscreen = true
                         },
                         videoPlayer = videoPlayer,
-                        onOpenLibrary = { showLibraryDialog = true },
+                        onOpenLibrary = {
+                            viewModel.refreshAvailableBundles()
+                            showLibraryDialog = true
+                        },
                         onSaveLibrary = { showSaveDialog = true },
                     )
 
@@ -573,6 +615,13 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
             )
         }
 
+        val defaultSaveBundleName = remember(folderSummary, selectedVideoName, activeBundleId) {
+            activeBundleId
+                ?: folderSummary?.substringBefore(" (")?.trim()
+                ?: selectedVideoName?.substringBeforeLast('.')?.trim()
+                ?: "bundle_01"
+        }
+
         // Render separate library dialog components safely at the root level
         HapticLibraryDialogs(
             libraryViewModel = libraryViewModel,
@@ -580,15 +629,25 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
             onDismissLibrary = { showLibraryDialog = false },
             showSaveDialog = showSaveDialog,
             onDismissSave = { showSaveDialog = false },
-            loadedVideoUri = loadedVideoUri,
-            selectedVideoName = selectedVideoName,
-            slotAUri = compareSlots[CompareAlgorithm.A]?.uri,
-            slotBUri = compareSlots[CompareAlgorithm.B]?.uri,
-            slotCUri = compareSlots[CompareAlgorithm.C]?.uri,
-            slotDUri = compareSlots[CompareAlgorithm.D]?.uri,
-            slotEUri = compareSlots[CompareAlgorithm.E]?.uri,
-            pipelineEventsUri = null,
-            pipelineEventsName = null,
+            defaultSaveBundleName = defaultSaveBundleName,
+            syncRootFolderName = syncRootFolderName,
+            isConnectedToDesktop = syncStatus.running && syncStatus.connectedClientIp != null,
+            syncedBundles = availableBundles,
+            desktopBundles = desktopLibraryBundles,
+            activeBundleId = activeBundleId,
+            transferStatus = transferStatus,
+            onSelectSyncFolder = { openSyncRootLauncher.launch(null) },
+            onRequestSyncLibrary = { viewModel.requestLibrarySyncFromAndroid() },
+            onSaveToLibrary = { name -> viewModel.saveCurrentFilesToLibrary(name) },
+            onLoadSyncedBundle = { bundleId ->
+                videoPlayer.pause()
+                viewModel.pauseVideo()
+                viewModel.loadBundleById(bundleId)
+                showLibraryDialog = false
+            },
+            onDeleteSyncedBundle = { bundleId ->
+                viewModel.deleteBundleById(bundleId)
+            },
             onLoadGroup = { group ->
                 // 1. Load video
                 group.videoUriString?.let { uriString ->
@@ -605,7 +664,7 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                 group.slotEUriString?.let { viewModel.loadCompareSlot(CompareAlgorithm.E, Uri.parse(it)) }
 
                 showLibraryDialog = false
-            }
+            },
         )
     }
 }
@@ -614,9 +673,12 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
 private fun DesktopSyncCard(
     status: SyncServerStatus,
     selectedEventCount: Int,
+    syncRootFolderName: String?,
+    transferStatus: String?,
     onStartSync: () -> Unit,
     onStopSync: () -> Unit,
     onRefreshIps: () -> Unit,
+    onSelectSyncFolder: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -697,6 +759,42 @@ private fun DesktopSyncCard(
                         Text("Refresh IP")
                     }
                 }
+            }
+
+            // Phase 3: Sync Storage Folder (Visible in File Explorer)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (syncRootFolderName != null) {
+                            "Library Folder: $syncRootFolderName (Visible in File Explorer)"
+                        } else {
+                            "Library Folder: None selected (Required to sync or save)"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                        color = if (syncRootFolderName != null) {
+                            if (status.connectedClientIp != null) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        },
+                    )
+                }
+                OutlinedButton(onClick = onSelectSyncFolder) {
+                    Text(if (syncRootFolderName != null) "Change Folder" else "Set Library Folder")
+                }
+            }
+
+            if (!transferStatus.isNullOrBlank()) {
+                Text(
+                    text = transferStatus,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (status.connectedClientIp != null) Color(0xFF81F4B6) else MaterialTheme.colorScheme.primary,
+                )
             }
 
             if (status.error != null) {
@@ -801,7 +899,11 @@ private fun VideoTab(
             Button(onClick = onOpenLibrary, modifier = Modifier.fillMaxWidth()) {
                 Text("Open Saved Libraries")
             }
-            OutlinedButton(onClick = onSaveLibrary, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = onSaveLibrary,
+                enabled = selectedVideoName != null,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 Text("Save Current Files to Library")
             }
 

@@ -1,10 +1,14 @@
 package com.example.haptictester.viewmodel
 
 import android.app.Application
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import java.io.EOFException
 import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -55,7 +59,14 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     private val audioHaptic = AudioHapticController(application.applicationContext, haptic)
     private val videoHaptic = VideoHapticController(application.applicationContext, haptic)
     private val gate = ThrottleGate(100L)
-    private val syncServer = DesktopSyncServer(onCommand = ::onRemoteSyncCommand)
+    private val syncPrefs = application.getSharedPreferences("haptic_sync_prefs", Context.MODE_PRIVATE)
+    private val syncServer = DesktopSyncServer(
+        onCommand = ::onRemoteSyncCommand,
+        onReceiveFile = ::receiveUploadedFile,
+        onFinishBundleUpload = ::finishBundleUpload,
+        onGetBundleManifest = ::getBundleManifest,
+        onOpenBundleFileStream = ::openBundleFileStream,
+    )
     val syncStatus = syncServer.status
 
     private val _remoteSyncCommands = MutableSharedFlow<RemoteSyncCommand>(extraBufferCapacity = 32)
@@ -177,11 +188,55 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     private val _selectedEventIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedEventIds = _selectedEventIds.asStateFlow()
 
+    private var loadedEventsRawJson: String? = null
+
+    private val _syncRootFolderName = MutableStateFlow<String?>(null)
+    val syncRootFolderName = _syncRootFolderName.asStateFlow()
+
+    private val _activeBundleId = MutableStateFlow<String?>(null)
+    val activeBundleId = _activeBundleId.asStateFlow()
+
+    private val _availableBundles = MutableStateFlow<List<String>>(emptyList())
+    val availableBundles = _availableBundles.asStateFlow()
+
+    private val _desktopLibraryBundles = MutableStateFlow<List<String>>(emptyList())
+    val desktopLibraryBundles = _desktopLibraryBundles.asStateFlow()
+
+    private val _transferStatus = MutableStateFlow<String?>(null)
+    val transferStatus = _transferStatus.asStateFlow()
+
+    // Incremented whenever the app needs the user to pick a Library Folder (UI opens the folder picker)
+    private val _libraryFolderPickRequest = MutableStateFlow(0)
+    val libraryFolderPickRequest = _libraryFolderPickRequest.asStateFlow()
+
+    // Actions to resume automatically once the user has picked a Library Folder
+    private var pendingLibrarySyncAfterPick = false
+    private var pendingSaveNameAfterPick: String? = null
+
     init {
         pushAudioTuning()
+        restoreSyncStorageFolder()
+    }
+
+    /**
+     * Returns the user-selected Library Folder, or null if none is selected / it is no longer accessible.
+     * There is intentionally NO hidden fallback storage: all bundles live only in this visible folder.
+     */
+    private fun libraryRootOrNull(): DocumentFile? {
+        val app = getApplication<Application>()
+        val raw = syncPrefs.getString("sync_root_tree_uri", null)
+        if (raw.isNullOrBlank()) return null
+        val doc = runCatching { DocumentFile.fromTreeUri(app, Uri.parse(raw)) }.getOrNull() ?: return null
+        return doc.takeIf { it.canRead() && it.canWrite() }
+    }
+
+    private fun askForLibraryFolder(message: String) {
+        _transferStatus.value = message
+        _libraryFolderPickRequest.value = _libraryFolderPickRequest.value + 1
     }
 
     fun startDesktopSync(port: Int = DesktopSyncServer.DEFAULT_PORT) {
+        refreshAvailableBundles()
         syncServer.start(port)
     }
 
@@ -191,6 +246,412 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
 
     fun refreshSyncIps() {
         syncServer.refreshLocalIps()
+    }
+
+    fun setDesktopLibraryBundles(bundles: List<String>) {
+        _desktopLibraryBundles.value = bundles.distinctBy { it.lowercase() }.sortedBy { it.lowercase() }
+    }
+
+    fun requestLibrarySyncFromAndroid() {
+        val status = syncStatus.value
+        if (!status.running || status.connectedClientIp == null) {
+            _transferStatus.value = "Connect to Haptic Studio Desktop first to sync libraries."
+            return
+        }
+        if (_syncRootFolderName.value == null || libraryRootOrNull() == null) {
+            pendingLibrarySyncAfterPick = true
+            askForLibraryFolder("Select a Library Folder on the phone before syncing.")
+            return
+        }
+        _transferStatus.value = "Requesting library sync with Desktop…"
+        syncServer.broadcastJson(JSONObject().put("type", "REQUEST_LIBRARY_SYNC"))
+    }
+
+    fun clearLoadedMedia(broadcastToDesktop: Boolean = false) {
+        stopVideo()
+        loadedVideoUri = null
+        loadedEventsRawJson = null
+        _demoVideoUri.value = null
+        _selectedVideoName.value = null
+        _selectedHapticTrackName.value = null
+        _hapticTrackFormat.value = null
+        _hapticTrackLoading.value = false
+        _videoMapWindows.value = 0
+        _videoMapWindowSizeMs.value = 0L
+        _hapticTrackDurationMs.value = 0L
+        _compareSlots.value = defaultCompareSlots()
+        _activeCompareAlgorithm.value = null
+        _detectedEvents.value = emptyList()
+        _selectedEventIds.value = emptySet()
+        _folderSummary.value = null
+        _videoError.value = null
+        _activeBundleId.value = null
+        lastSyncPositionMs = 0L
+        lastSyncDurationMs = 0L
+        if (broadcastToDesktop) {
+            val status = syncStatus.value
+            if (status.running && status.connectedClientIp != null) {
+                syncServer.broadcastJson(JSONObject().put("type", "COMMAND_CLEAR_MEDIA"))
+            }
+        }
+    }
+
+    fun setSyncStorageFolder(treeUri: Uri) {
+        val app = getApplication<Application>()
+        takePersistableTreePermission(app, treeUri)
+        syncPrefs.edit().putString("sync_root_tree_uri", treeUri.toString()).apply()
+        val folderName = DocumentFile.fromTreeUri(app, treeUri)?.name ?: "Selected Folder"
+        _syncRootFolderName.value = folderName
+        if (_transferStatus.value?.startsWith("Select a Library Folder") == true ||
+            _transferStatus.value?.startsWith("Haptic Studio") == true
+        ) {
+            _transferStatus.value = null
+        }
+
+        val resumeSync = pendingLibrarySyncAfterPick
+        val resumeSaveName = pendingSaveNameAfterPick
+        pendingLibrarySyncAfterPick = false
+        pendingSaveNameAfterPick = null
+
+        refreshAvailableBundles {
+            // Runs after the new folder's bundle list has been sent to Desktop
+            if (resumeSaveName != null) {
+                saveCurrentFilesToLibrary(resumeSaveName)
+            } else if (resumeSync) {
+                requestLibrarySyncFromAndroid()
+            }
+        }
+    }
+
+    private fun restoreSyncStorageFolder() {
+        val app = getApplication<Application>()
+        val rawUri = syncPrefs.getString("sync_root_tree_uri", null)
+        if (!rawUri.isNullOrBlank()) {
+            val uri = runCatching { Uri.parse(rawUri) }.getOrNull()
+            if (uri != null) {
+                val doc = runCatching { DocumentFile.fromTreeUri(app, uri) }.getOrNull()
+                if (doc != null && doc.canRead()) {
+                    _syncRootFolderName.value = doc.name ?: "Selected Folder"
+                }
+            }
+        }
+        refreshAvailableBundles()
+    }
+
+    fun refreshAvailableBundles(afterRefresh: (() -> Unit)? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val names = linkedSetOf<String>()
+
+            // Only the user-selected Library Folder is ever listed (no hidden fallback storage)
+            libraryRootOrNull()?.listFiles()?.forEach { child ->
+                val name = child.name?.trim()
+                if (child.isDirectory && !name.isNullOrEmpty()) {
+                    names += name
+                }
+            }
+
+            _availableBundles.value = names.sortedBy { it.lowercase() }
+            broadcastSyncState(isHeartbeat = false)
+            afterRefresh?.invoke()
+        }
+    }
+
+    fun deleteBundleById(bundleId: String) {
+        val trimmed = bundleId.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            libraryRootOrNull()?.listFiles()?.firstOrNull {
+                it.isDirectory && it.name.equals(trimmed, ignoreCase = true)
+            }?.delete()
+
+            if (_activeBundleId.value.equals(trimmed, ignoreCase = true)) {
+                _activeBundleId.value = null
+            }
+            refreshAvailableBundles()
+        }
+    }
+
+    fun saveCurrentFilesToLibrary(rawBundleName: String) {
+        val sanitized = rawBundleName.trim()
+            .replace('/', '_')
+            .replace('\\', '_')
+            .replace("..", "_")
+            .trim()
+        if (sanitized.isEmpty()) {
+            _videoError.value = "Please enter a valid bundle name."
+            return
+        }
+        val videoUri = loadedVideoUri
+        if (videoUri == null) {
+            _videoError.value = "Load a video or folder first before saving to the Library."
+            return
+        }
+
+        if (_syncRootFolderName.value == null || libraryRootOrNull() == null) {
+            pendingSaveNameAfterPick = sanitized
+            askForLibraryFolder("Select a Library Folder first — '$sanitized' will be saved there.")
+            return
+        }
+
+        val app = getApplication<Application>()
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                _transferStatus.value = "Saving '$sanitized' to Library…"
+                val rootDoc = libraryRootOrNull()
+                    ?: throw IllegalStateException("No Library Folder selected on the phone.")
+
+                val videoFileName = (_selectedVideoName.value?.takeIf { it.isNotBlank() } ?: "video.mp4")
+                val eventsJsonText = loadedEventsRawJson ?: serializeDetectedEventsJson(_detectedEvents.value)
+
+                val bundleDir = rootDoc.listFiles().firstOrNull {
+                    it.isDirectory && it.name.equals(sanitized, ignoreCase = true)
+                } ?: rootDoc.createDirectory(sanitized)
+                    ?: throw IllegalStateException("Could not create folder '$sanitized' in Library")
+
+                // 1. Copy Video
+                copyUriToDocumentDir(app, videoUri, bundleDir, videoFileName)
+
+                // 2. Copy loaded A-E WAV slots
+                for (algo in CompareAlgorithm.all) {
+                    val slot = _compareSlots.value[algo] ?: continue
+                    val slotUri = slot.uri ?: continue
+                    val wavName = slot.fileName?.takeIf { it.endsWith(".wav", ignoreCase = true) }
+                        ?: when (algo) {
+                            CompareAlgorithm.A -> "algorithm_a_perception_mapping.wav"
+                            CompareAlgorithm.B -> "algorithm_b_frequency_shifting.wav"
+                            CompareAlgorithm.C -> "algorithm_c_pitch_matching.wav"
+                            CompareAlgorithm.D -> "algorithm_d_haptic_gen.wav"
+                            CompareAlgorithm.E -> "algorithm_e_rule_based.wav"
+                        }
+                    copyUriToDocumentDir(app, slotUri, bundleDir, wavName)
+                }
+
+                // 3. Write events.json
+                if (eventsJsonText.isNotBlank()) {
+                    bundleDir.findFile("events.json")?.delete()
+                    val evDoc = bundleDir.createFile("application/json", "events.json")
+                    if (evDoc != null) {
+                        app.contentResolver.openOutputStream(evDoc.uri, "w")?.use { out ->
+                            out.write(eventsJsonText.toByteArray(Charsets.UTF_8))
+                            out.flush()
+                        }
+                    }
+                }
+
+                _activeBundleId.value = sanitized
+                _folderSummary.value = "$sanitized (Saved in Library)"
+                _transferStatus.value = "Saved '$sanitized' to Library."
+                refreshAvailableBundles()
+                viewModelScope.launch {
+                    delay(3500)
+                    if (_transferStatus.value == "Saved '$sanitized' to Library.") {
+                        _transferStatus.value = null
+                    }
+                }
+            } catch (err: Throwable) {
+                _transferStatus.value = "Save failed: ${err.message ?: "Error"}"
+            }
+        }
+    }
+
+    private fun copyUriToDocumentDir(app: Application, sourceUri: Uri, targetDir: DocumentFile, fileName: String) {
+        val existing = targetDir.findFile(fileName)
+        if (existing != null && existing.uri == sourceUri) return
+        existing?.delete()
+        val created = targetDir.createFile(guessMimeType(fileName), fileName)
+            ?: throw IllegalStateException("Could not create '$fileName'")
+        app.contentResolver.openInputStream(sourceUri)?.use { input ->
+            app.contentResolver.openOutputStream(created.uri, "w")?.use { output ->
+                input.copyTo(output, 64 * 1024)
+                output.flush()
+            }
+        }
+    }
+
+    private fun copyUriToFile(app: Application, sourceUri: Uri, targetFile: File) {
+        if (sourceUri.scheme == "file" && sourceUri.path == targetFile.absolutePath) return
+        app.contentResolver.openInputStream(sourceUri)?.use { input ->
+            targetFile.outputStream().use { output ->
+                input.copyTo(output, 64 * 1024)
+                output.flush()
+            }
+        }
+    }
+
+    private fun serializeDetectedEventsJson(events: List<DetectedEvent>): String {
+        if (events.isEmpty()) return ""
+        val arr = JSONArray()
+        events.forEach { ev ->
+            arr.put(
+                JSONObject()
+                    .put("event_id", ev.id)
+                    .put("label", ev.label)
+                    .put("category", ev.category)
+                    .put("start_sec", ev.startMs / 1000.0)
+                    .put("end_sec", ev.endMs / 1000.0)
+            )
+        }
+        return JSONObject().put("events", arr).toString(2)
+    }
+
+    private fun requireLibraryRootForTransfer(): DocumentFile {
+        return libraryRootOrNull() ?: run {
+            pendingLibrarySyncAfterPick = true
+            askForLibraryFolder("Haptic Studio wants to sync. Select a Library Folder on the phone first.")
+            throw IllegalStateException(
+                "No Library Folder selected on the phone. Select one on the phone, then sync again."
+            )
+        }
+    }
+
+    private fun getBundleManifest(bundleId: String): Result<JSONArray> {
+        return runCatching {
+            val arr = JSONArray()
+            val rootDoc = requireLibraryRootForTransfer()
+
+            val bundleDir = rootDoc.listFiles().firstOrNull {
+                it.isDirectory && it.name.equals(bundleId, ignoreCase = true)
+            } ?: throw IllegalArgumentException("Bundle '$bundleId' not found on phone")
+
+            val seenNames = mutableSetOf<String>()
+            bundleDir.listFiles().forEach { child ->
+                val name = child.name
+                if (child.isFile && !name.isNullOrBlank()) {
+                    seenNames += name.lowercase()
+                    arr.put(
+                        JSONObject()
+                            .put("name", name)
+                            .put("size", child.length())
+                    )
+                }
+            }
+            if ("events.json" !in seenNames) {
+                val nestedEvents = findEventsJson(bundleDir)
+                if (nestedEvents != null) {
+                    arr.put(
+                        JSONObject()
+                            .put("name", "events.json")
+                            .put("size", nestedEvents.length())
+                    )
+                }
+            }
+            arr
+        }
+    }
+
+    private fun openBundleFileStream(bundleId: String, fileName: String): Result<Pair<Long, InputStream>> {
+        val app = getApplication<Application>()
+        return runCatching {
+            _transferStatus.value = "Sending $bundleId / $fileName to PC…"
+            val rootDoc = requireLibraryRootForTransfer()
+
+            val bundleDir = rootDoc.listFiles().firstOrNull {
+                it.isDirectory && it.name.equals(bundleId, ignoreCase = true)
+            } ?: throw IllegalArgumentException("Bundle '$bundleId' not found")
+
+            val targetDoc = bundleDir.listFiles().firstOrNull {
+                it.isFile && it.name.equals(fileName, ignoreCase = true)
+            } ?: if (fileName.equals("events.json", ignoreCase = true)) {
+                findEventsJson(bundleDir)
+            } else {
+                null
+            } ?: throw IllegalArgumentException("File '$fileName' not found in '$bundleId'")
+
+            val stream = app.contentResolver.openInputStream(targetDoc.uri)
+                ?: throw IllegalStateException("Cannot open '$fileName'")
+            targetDoc.length() to stream
+        }
+    }
+
+    private fun receiveUploadedFile(
+        bundleId: String,
+        fileName: String,
+        contentLength: Long,
+        input: InputStream,
+    ): Result<Unit> {
+        val app = getApplication<Application>()
+        return runCatching {
+            // Never store into hidden app storage: a visible Library Folder is required
+            val rootDoc = requireLibraryRootForTransfer()
+            _transferStatus.value = "Syncing $bundleId / $fileName…"
+
+            val bundleDir = rootDoc.findFile(bundleId)?.takeIf { it.isDirectory }
+                ?: rootDoc.createDirectory(bundleId)
+                ?: throw IllegalStateException("Could not create bundle directory '$bundleId' in Library Folder")
+
+            // Delete existing file with the same name so SAF does not append (1)
+            bundleDir.findFile(fileName)?.delete()
+            val mime = guessMimeType(fileName)
+            val targetFile = bundleDir.createFile(mime, fileName)
+                ?: throw IllegalStateException("Could not create file '$fileName' in '$bundleId'")
+
+            app.contentResolver.openOutputStream(targetFile.uri, "w")?.use { output ->
+                copyStreamExact(input, output, contentLength, bundleId, fileName)
+            } ?: throw IllegalStateException("Unable to open output stream for '$fileName'")
+        }.onFailure { err ->
+            if (_transferStatus.value?.startsWith("Haptic Studio wants to sync") != true) {
+                _transferStatus.value = "Sync failed: ${err.message ?: "Error"}"
+            }
+        }
+    }
+
+
+    private fun copyStreamExact(
+        input: InputStream,
+        output: OutputStream,
+        contentLength: Long,
+        bundleId: String,
+        fileName: String,
+    ) {
+        val buffer = ByteArray(64 * 1024)
+        var remaining = contentLength
+        var received = 0L
+        var lastReportMs = 0L
+        while (remaining > 0L) {
+            val toRead = minOf(buffer.size.toLong(), remaining).toInt()
+            val read = input.read(buffer, 0, toRead)
+            if (read == -1) throw EOFException("Unexpected end of upload stream for $fileName")
+            output.write(buffer, 0, read)
+            remaining -= read
+            received += read
+            val now = SystemClock.elapsedRealtime()
+            if (contentLength > 0 && now - lastReportMs >= 150L) {
+                lastReportMs = now
+                val pct = ((received * 100L) / contentLength).coerceIn(0L, 100L)
+                _transferStatus.value = "Syncing $bundleId / $fileName ($pct%)"
+            }
+        }
+        output.flush()
+    }
+
+    private fun guessMimeType(fileName: String): String {
+        val lower = fileName.lowercase()
+        return when {
+            lower.endsWith(".mp4") -> "video/mp4"
+            lower.endsWith(".mkv") -> "video/x-matroska"
+            lower.endsWith(".webm") -> "video/webm"
+            lower.endsWith(".mov") -> "video/quicktime"
+            lower.endsWith(".avi") -> "video/x-msvideo"
+            lower.endsWith(".wav") -> "audio/x-wav"
+            lower.endsWith(".json") -> "application/json"
+            else -> "application/octet-stream"
+        }
+    }
+
+    private fun finishBundleUpload(bundleId: String, autoLoad: Boolean): Result<Unit> {
+        return runCatching {
+            _transferStatus.value = "Synced '$bundleId'"
+            refreshAvailableBundles()
+            if (autoLoad) {
+                onRemoteSyncCommand(RemoteSyncCommand.LoadBundle(bundleId))
+            }
+            viewModelScope.launch {
+                delay(3500)
+                if (_transferStatus.value == "Synced '$bundleId'" || _transferStatus.value?.startsWith("Sending ") == true) {
+                    _transferStatus.value = null
+                }
+            }
+        }
     }
 
     fun setSelectedEventIds(ids: Set<String>, broadcast: Boolean = true) {
@@ -229,6 +690,9 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
                 is RemoteSyncCommand.RequestState -> {
                     broadcastSyncState(isHeartbeat = false)
                 }
+                is RemoteSyncCommand.UpdateDesktopLibrary -> {
+                    setDesktopLibraryBundles(command.bundles)
+                }
                 else -> {
                     _remoteSyncCommands.tryEmit(command)
                 }
@@ -255,6 +719,9 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         val selectedEventsArray = JSONArray()
         _selectedEventIds.value.forEach { selectedEventsArray.put(it) }
 
+        val availableBundlesArray = JSONArray()
+        _availableBundles.value.forEach { availableBundlesArray.put(it) }
+
         val effectiveDuration = when {
             durationMs > 0L -> durationMs
             lastSyncDurationMs > 0L -> lastSyncDurationMs
@@ -272,6 +739,11 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
             .put("readyAlgorithms", readyAlgos)
             .put("selectedEventIds", selectedEventsArray)
             .put("videoName", _selectedVideoName.value ?: JSONObject.NULL)
+
+        if (!isHeartbeat) {
+            payload.put("activeBundleId", _activeBundleId.value ?: JSONObject.NULL)
+            payload.put("availableBundles", availableBundlesArray)
+        }
 
         syncServer.broadcastJson(payload)
     }
@@ -384,6 +856,10 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
                 val video = File(dir, "video.mp4")
                 if (!video.exists()) return@launch
 
+                _activeBundleId.value = null
+                _compareSlots.value = defaultCompareSlots()
+                _activeCompareAlgorithm.value = null
+
                 val videoUri = Uri.fromFile(video)
                 loadVideo(videoUri)
                 _demoVideoUri.value = videoUri
@@ -404,7 +880,9 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
                 _detectedEvents.value = withContext(Dispatchers.IO) {
                     runCatching {
                         app.assets.open("demo/events.json").bufferedReader().use { reader ->
-                            DetectedEvents.parse(reader.readText())
+                            val raw = reader.readText()
+                            loadedEventsRawJson = raw
+                            DetectedEvents.parse(raw)
                         }
                     }.getOrDefault(emptyList())
                 }
@@ -421,45 +899,131 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             try {
                 takePersistableTreePermission(app, treeUri)
-                val (children, events) = withContext(Dispatchers.IO) {
-                    val root = DocumentFile.fromTreeUri(app, treeUri)
-                        ?: throw IllegalArgumentException("Unable to open the selected folder")
-                    val files = root.listFiles().filter { it.isFile && !it.name.isNullOrBlank() }
-                    val events = findEventsJson(root)?.let { file ->
-                        app.contentResolver.openInputStream(file.uri)?.bufferedReader()?.use { reader ->
-                            DetectedEvents.parse(reader.readText())
-                        }
-                    }.orEmpty()
-                    files to events
+                val root = DocumentFile.fromTreeUri(app, treeUri)
+                    ?: throw IllegalArgumentException("Unable to open the selected folder")
+                val folderLabel = root.name?.trim()?.takeIf { it.isNotEmpty() } ?: "custom_folder"
+                // Loading a random folder outside the Library blanks the Desktop app until saved to Library & synced
+                loadFolderDocument(root, folderLabel, isLibraryBundle = false)
+                val status = syncStatus.value
+                if (status.running && status.connectedClientIp != null) {
+                    syncServer.broadcastJson(JSONObject().put("type", "COMMAND_CLEAR_MEDIA"))
                 }
-                val byName = children.associateBy { it.name!! }
-                val match = HapticFolderMatcher.match(byName.keys.toList())
-                if (match.isEmpty) {
-                    _folderSummary.value = null
-                    _videoError.value = "No video or A–E WAVs found in that folder."
-                    return@launch
-                }
-
-                _folderSummary.value = match.summary()
-                _videoError.value = null
-
-                match.videoName?.let { name ->
-                    val uri = byName[name]?.uri ?: return@let
-                    loadVideo(uri)
-                    _demoVideoUri.value = uri
-                }
-                for ((algorithm, name) in match.slotNames) {
-                    val uri = byName[name]?.uri ?: continue
-                    loadCompareSlot(algorithm, uri)
-                }
-                _detectedEvents.value = events
-                _selectedEventIds.value = emptySet()
-                broadcastSyncState(isHeartbeat = false)
             } catch (throwable: Throwable) {
                 _folderSummary.value = null
                 _videoError.value = throwable.message ?: throwable.toString()
             }
         }
+    }
+
+    fun loadBundleById(bundleId: String) {
+        val trimmed = bundleId.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                val rootDoc = withContext(Dispatchers.IO) { libraryRootOrNull() }
+                if (rootDoc != null) {
+                    val subDoc = withContext(Dispatchers.IO) {
+                        rootDoc.listFiles().firstOrNull {
+                            it.isDirectory && it.name.equals(trimmed, ignoreCase = true)
+                        }
+                    }
+                    if (subDoc != null) {
+                        loadFolderDocument(subDoc, subDoc.name ?: trimmed, isLibraryBundle = true)
+                        return@launch
+                    }
+                }
+
+                // Bundle is not in the phone's Library Folder -> blank phone media
+                clearLoadedMedia(broadcastToDesktop = false)
+                _videoError.value = "Bundle '$trimmed' is not in the phone's Library Folder. Open Library -> Sync Library with PC."
+            } catch (throwable: Throwable) {
+                _videoError.value = throwable.message ?: throwable.toString()
+            }
+        }
+    }
+
+    private suspend fun loadFolderDocument(root: DocumentFile, bundleId: String, isLibraryBundle: Boolean) {
+        val app = getApplication<Application>()
+        val (children, rawEventsPair) = withContext(Dispatchers.IO) {
+            val files = root.listFiles().filter { it.isFile && !it.name.isNullOrBlank() }
+            val rawAndParsed = findEventsJson(root)?.let { file ->
+                app.contentResolver.openInputStream(file.uri)?.bufferedReader()?.use { reader ->
+                    val raw = reader.readText()
+                    raw to DetectedEvents.parse(raw)
+                }
+            }
+            files to rawAndParsed
+        }
+        val byName = children.associateBy { it.name!! }
+        val match = HapticFolderMatcher.match(byName.keys.toList())
+        if (match.isEmpty) {
+            _folderSummary.value = null
+            _videoError.value = "No video or A–E WAVs found in '$bundleId'."
+            return
+        }
+
+        _activeBundleId.value = if (isLibraryBundle) bundleId else null
+        _folderSummary.value = "$bundleId (${match.summary()})"
+        _videoError.value = null
+        _compareSlots.value = defaultCompareSlots()
+        _activeCompareAlgorithm.value = null
+
+        match.videoName?.let { name ->
+            val uri = byName[name]?.uri ?: return@let
+            loadVideo(uri)
+            _demoVideoUri.value = uri
+        }
+        for ((algorithm, name) in match.slotNames) {
+            val uri = byName[name]?.uri ?: continue
+            loadCompareSlot(algorithm, uri)
+        }
+        loadedEventsRawJson = rawEventsPair?.first
+        _detectedEvents.value = rawEventsPair?.second.orEmpty()
+        _selectedEventIds.value = emptySet()
+        broadcastSyncState(isHeartbeat = false)
+    }
+
+    private suspend fun loadLocalFileBundle(dir: File, bundleId: String, isLibraryBundle: Boolean) {
+        val (files, rawEventsPair) = withContext(Dispatchers.IO) {
+            val childFiles = dir.listFiles()?.filter { it.isFile } ?: emptyList()
+            val eventsFile = File(dir, "debug/context_detector/events.json").takeIf { it.exists() }
+                ?: File(dir, "events.json").takeIf { it.exists() }
+            val rawAndParsed = eventsFile?.let { f ->
+                runCatching {
+                    val raw = f.readText()
+                    raw to DetectedEvents.parse(raw)
+                }.getOrNull()
+            }
+            childFiles to rawAndParsed
+        }
+        val byName = files.associateBy { it.name }
+        val match = HapticFolderMatcher.match(byName.keys.toList())
+        if (match.isEmpty) {
+            _folderSummary.value = null
+            _videoError.value = "No video or A–E WAVs found in '$bundleId'."
+            return
+        }
+
+        _activeBundleId.value = if (isLibraryBundle) bundleId else null
+        _folderSummary.value = "$bundleId (${match.summary()})"
+        _videoError.value = null
+        _compareSlots.value = defaultCompareSlots()
+        _activeCompareAlgorithm.value = null
+
+        match.videoName?.let { name ->
+            val file = byName[name] ?: return@let
+            val uri = Uri.fromFile(file)
+            loadVideo(uri)
+            _demoVideoUri.value = uri
+        }
+        for ((algorithm, name) in match.slotNames) {
+            val file = byName[name] ?: continue
+            loadCompareSlot(algorithm, Uri.fromFile(file))
+        }
+        loadedEventsRawJson = rawEventsPair?.first
+        _detectedEvents.value = rawEventsPair?.second.orEmpty()
+        _selectedEventIds.value = emptySet()
+        broadcastSyncState(isHeartbeat = false)
     }
 
     private fun findEventsJson(root: DocumentFile): DocumentFile? {
