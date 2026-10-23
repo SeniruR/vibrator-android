@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +67,7 @@ import com.example.haptictester.haptic.CompareAlgorithm
 import com.example.haptictester.haptic.CompareSlotState
 import com.example.haptictester.haptic.DetectedEvent
 import com.example.haptictester.haptic.HapticMapData
+import com.example.haptictester.sync.RemoteSyncCommand
 import com.example.haptictester.viewmodel.HapticViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -116,7 +118,7 @@ fun VideoCompareFullscreenOverlay(
     var selectedSpeed by remember(videoPlayer) { mutableStateOf(videoPlayer.playbackParameters.speed) }
     var speedMenuExpanded by remember { mutableStateOf(false) }
     var debugVisible by remember { mutableStateOf(false) }
-    var selectedEventIds by remember { mutableStateOf(setOf<String>()) }
+    val selectedEventIds by viewModel.selectedEventIds.collectAsState()
     var eventPlayStartMs by remember { mutableStateOf<Long?>(null) }
     var eventPlayUntilMs by remember { mutableStateOf<Long?>(null) }
     var eventPlayToken by remember { mutableIntStateOf(0) }
@@ -149,11 +151,23 @@ fun VideoCompareFullscreenOverlay(
                 reason: Int,
             ) {
                 positionMs = newPosition.positionMs.coerceAtLeast(0L)
-                if (reason == Player.DISCONTINUITY_REASON_SEEK) pendingSeekTargetMs = null
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                    pendingSeekTargetMs = null
+                    viewModel.notifyPlayerStateChanged(
+                        positionMs = positionMs,
+                        durationMs = durationMs,
+                        speed = selectedSpeed,
+                    )
+                }
             }
 
             override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
                 selectedSpeed = playbackParameters.speed
+                viewModel.notifyPlayerStateChanged(
+                    positionMs = videoPlayer.currentPosition.coerceAtLeast(0L),
+                    durationMs = durationMs,
+                    speed = selectedSpeed,
+                )
             }
 
             override fun onEvents(player: Player, events: Player.Events) {
@@ -185,8 +199,8 @@ fun VideoCompareFullscreenOverlay(
         controlsVisible = false
     }
 
-    fun selectedSpan(): Pair<Long, Long>? {
-        val chosen = detectedEvents.filter { it.id in selectedEventIds }
+    fun selectedSpan(ids: Set<String> = selectedEventIds): Pair<Long, Long>? {
+        val chosen = detectedEvents.filter { it.id in ids }
         if (chosen.isEmpty()) return null
         val start = chosen.minOf { it.startMs }.coerceAtLeast(0L)
         val end = chosen.maxOf { it.endMs }.coerceAtLeast(start + 200L)
@@ -211,6 +225,7 @@ fun VideoCompareFullscreenOverlay(
         videoPlayer.seekTo(seekTo)
         videoPlayer.playWhenReady = true
         videoPlayer.play()
+        viewModel.notifyPlayerStateChanged(positionMs = seekTo, durationMs = durationMs, speed = selectedSpeed)
     }
 
     fun playWholeClip() {
@@ -223,26 +238,108 @@ fun VideoCompareFullscreenOverlay(
         videoPlayer.seekTo(0L)
         videoPlayer.playWhenReady = true
         videoPlayer.play()
+        viewModel.notifyPlayerStateChanged(positionMs = 0L, durationMs = durationMs, speed = selectedSpeed)
     }
 
-    fun toggleEvent(event: DetectedEvent) {
-        val next = if (event.id in selectedEventIds) {
-            selectedEventIds - event.id
-        } else {
-            selectedEventIds + event.id
-        }
-        selectedEventIds = next
+    fun applyEventSelectionAfterChange(nextIds: Set<String>) {
         eventPlayStartMs = null
         eventPlayUntilMs = null
-        if (next.isEmpty()) {
+        if (nextIds.isEmpty()) {
             playWholeClip()
             return
         }
         if (!videoPlayer.isPlaying) {
-            val start = detectedEvents.filter { it.id in next }.minOf { it.startMs }.coerceAtLeast(0L)
+            val start = detectedEvents.filter { it.id in nextIds }.minOfOrNull { it.startMs }?.coerceAtLeast(0L) ?: 0L
             viewModel.pauseVideo()
             pendingSeekTargetMs = start
             videoPlayer.seekTo(start)
+            viewModel.notifyPlayerStateChanged(positionMs = start, durationMs = durationMs, speed = selectedSpeed)
+        }
+    }
+
+    fun toggleEvent(event: DetectedEvent) {
+        val next = viewModel.toggleSelectedEvent(event.id, broadcast = true)
+        applyEventSelectionAfterChange(next)
+    }
+
+    LaunchedEffect(viewModel, videoPlayer) {
+        viewModel.remoteSyncCommands.collect { command ->
+            when (command) {
+                is RemoteSyncCommand.Play -> {
+                    val span = selectedSpan()
+                    if (span != null && command.timeMs == null) {
+                        playSpanOnce(span.first, span.second, activeAlgorithm)
+                    } else {
+                        if (command.timeMs != null && kotlin.math.abs(videoPlayer.currentPosition - command.timeMs) > 120L) {
+                            pendingSeekTargetMs = command.timeMs
+                            videoPlayer.seekTo(command.timeMs)
+                        } else if (videoPlayer.playbackState == Player.STATE_ENDED) {
+                            videoPlayer.seekTo(0L)
+                            positionMs = 0L
+                        }
+                        viewModel.playVideo()
+                        videoPlayer.playWhenReady = true
+                        videoPlayer.play()
+                    }
+                }
+                is RemoteSyncCommand.Pause -> {
+                    videoPlayer.pause()
+                    viewModel.pauseVideo()
+                    if (command.timeMs != null && kotlin.math.abs(videoPlayer.currentPosition - command.timeMs) > 80L) {
+                        pendingSeekTargetMs = command.timeMs
+                        videoPlayer.seekTo(command.timeMs)
+                        positionMs = command.timeMs
+                    }
+                    viewModel.notifyPlayerStateChanged(
+                        positionMs = command.timeMs ?: videoPlayer.currentPosition.coerceAtLeast(0L),
+                        durationMs = durationMs,
+                        speed = selectedSpeed,
+                    )
+                }
+                is RemoteSyncCommand.Seek -> {
+                    val target = command.timeMs.coerceIn(0L, durationMs.coerceAtLeast(1L))
+                    pendingSeekTargetMs = target
+                    positionMs = target
+                    videoPlayer.seekTo(target)
+                    viewModel.onVideoPlaybackPosition(target.toInt(), durationMs)
+                    viewModel.notifyPlayerStateChanged(positionMs = target, durationMs = durationMs, speed = selectedSpeed)
+                }
+                is RemoteSyncCommand.SetSpeed -> {
+                    selectedSpeed = command.speed
+                    videoPlayer.setPlaybackSpeed(command.speed)
+                    viewModel.notifyPlayerStateChanged(
+                        positionMs = videoPlayer.currentPosition.coerceAtLeast(0L),
+                        durationMs = durationMs,
+                        speed = command.speed,
+                    )
+                }
+                is RemoteSyncCommand.SelectAlgorithm -> {
+                    val algo = CompareAlgorithm.all.firstOrNull { it.id.equals(command.algorithmId, ignoreCase = true) }
+                    if (algo != null && compareSlots[algo]?.isReady == true) {
+                        val span = selectedSpan()
+                        if (span != null) {
+                            playSpanOnce(span.first, span.second, algo)
+                        } else {
+                            viewModel.switchCompareSlot(algo, videoPlayer.currentPosition.coerceAtLeast(0L))
+                        }
+                    }
+                }
+                is RemoteSyncCommand.ToggleEvent -> {
+                    val next = viewModel.toggleSelectedEvent(command.eventId, broadcast = true)
+                    applyEventSelectionAfterChange(next)
+                }
+                is RemoteSyncCommand.SetSelectedEvents -> {
+                    viewModel.setSelectedEventIds(command.eventIds, broadcast = true)
+                    applyEventSelectionAfterChange(viewModel.selectedEventIds.value)
+                }
+                RemoteSyncCommand.RequestState -> {
+                    viewModel.notifyPlayerStateChanged(
+                        positionMs = videoPlayer.currentPosition.coerceAtLeast(0L),
+                        durationMs = durationMs,
+                        speed = selectedSpeed,
+                    )
+                }
+            }
         }
     }
 
@@ -262,6 +359,7 @@ fun VideoCompareFullscreenOverlay(
                         videoPlayer.pause()
                         viewModel.pauseVideo()
                         positionMs = until
+                        viewModel.notifyPlayerStateChanged(positionMs = until, durationMs = durationMs, speed = selectedSpeed)
                         reachedEventEnd = true
                     }
                 }

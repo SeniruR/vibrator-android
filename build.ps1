@@ -59,14 +59,20 @@ if (-not $sdkPath) {
 Write-LocalProperties $sdkPath
 
 if (!(Test-Path "$gradleDir\bin\gradle.bat")) {
-    Write-Host "Downloading Gradle $version..."
     New-Item -ItemType Directory -Path ".\.gradle-wrapper" -Force | Out-Null
-    $zip = ".\.gradle-wrapper\gradle-$version-download.zip"
-    if (Test-Path $zip) { Remove-Item $zip -Force -ErrorAction SilentlyContinue }
-    Invoke-WebRequest -Uri "https://services.gradle.org/distributions/gradle-$version-bin.zip" -OutFile $zip -UseBasicParsing
-    Write-Host "Extracting..."
-    Expand-Archive -Path $zip -DestinationPath ".\.gradle-wrapper" -Force
-    Remove-Item -Path $zip -Force
+    $cachedGradle = Get-ChildItem -Path (Join-Path $env:USERPROFILE ".gradle\wrapper\dists\gradle-$version-bin") -Directory -Recurse -Filter "gradle-$version" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cachedGradle -and (Test-Path (Join-Path $cachedGradle.FullName "bin\gradle.bat"))) {
+        Write-Host "Using cached Gradle $version from $($cachedGradle.FullName)..."
+        Copy-Item -Path $cachedGradle.FullName -Destination $gradleDir -Recurse -Force
+    } else {
+        Write-Host "Downloading Gradle $version..."
+        $zip = ".\.gradle-wrapper\gradle-$version-download.zip"
+        if (Test-Path $zip) { Remove-Item $zip -Force -ErrorAction SilentlyContinue }
+        Invoke-WebRequest -Uri "https://services.gradle.org/distributions/gradle-$version-bin.zip" -OutFile $zip -UseBasicParsing
+        Write-Host "Extracting..."
+        Expand-Archive -Path $zip -DestinationPath ".\.gradle-wrapper" -Force
+        Remove-Item -Path $zip -Force
+    }
 }
 
 if ($Mode -eq 'fast') {

@@ -10,10 +10,15 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import android.os.SystemClock
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import com.example.haptictester.haptic.AudioHapticController
 import com.example.haptictester.haptic.AudioHapticController.HapticPulseDebug
 import com.example.haptictester.haptic.CompareAlgorithm
@@ -26,6 +31,8 @@ import com.example.haptictester.haptic.HapticTrackFormat
 import com.example.haptictester.haptic.VideoHapticController
 import com.example.haptictester.haptic.WavHapticParser
 import com.example.haptictester.haptic.ThrottleGate
+import com.example.haptictester.sync.DesktopSyncServer
+import com.example.haptictester.sync.RemoteSyncCommand
 
 data class AudioDebugPulse(
     val sampleIndex: Int,
@@ -48,6 +55,24 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     private val audioHaptic = AudioHapticController(application.applicationContext, haptic)
     private val videoHaptic = VideoHapticController(application.applicationContext, haptic)
     private val gate = ThrottleGate(100L)
+    private val syncServer = DesktopSyncServer(onCommand = ::onRemoteSyncCommand)
+    val syncStatus = syncServer.status
+
+    private val _remoteSyncCommands = MutableSharedFlow<RemoteSyncCommand>(extraBufferCapacity = 32)
+    val remoteSyncCommands = _remoteSyncCommands.asSharedFlow()
+
+    @Volatile
+    private var lastSyncPositionMs: Long = 0L
+
+    @Volatile
+    private var lastSyncDurationMs: Long = 0L
+
+    @Volatile
+    private var lastSyncSpeed: Float = 1.0f
+
+    @Volatile
+    private var lastHeartbeatElapsedMs: Long = 0L
+
     private var liveUpdateJob: Job? = null
     private var analysisJob: Job? = null
     private var sensitivityReanalyzeJob: Job? = null
@@ -149,8 +174,106 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     private val _detectedEvents = MutableStateFlow<List<DetectedEvent>>(emptyList())
     val detectedEvents = _detectedEvents.asStateFlow()
 
+    private val _selectedEventIds = MutableStateFlow<Set<String>>(emptySet())
+    val selectedEventIds = _selectedEventIds.asStateFlow()
+
     init {
         pushAudioTuning()
+    }
+
+    fun startDesktopSync(port: Int = DesktopSyncServer.DEFAULT_PORT) {
+        syncServer.start(port)
+    }
+
+    fun stopDesktopSync() {
+        syncServer.stop()
+    }
+
+    fun refreshSyncIps() {
+        syncServer.refreshLocalIps()
+    }
+
+    fun setSelectedEventIds(ids: Set<String>, broadcast: Boolean = true) {
+        val validIds = _detectedEvents.value.map { it.id }.toSet()
+        val filtered = if (validIds.isEmpty()) ids else ids.intersect(validIds)
+        _selectedEventIds.value = filtered
+        if (broadcast) {
+            broadcastSyncState(isHeartbeat = false)
+        }
+    }
+
+    fun toggleSelectedEvent(eventId: String, broadcast: Boolean = true): Set<String> {
+        val current = _selectedEventIds.value
+        val next = if (eventId in current) current - eventId else current + eventId
+        _selectedEventIds.value = next
+        if (broadcast) {
+            broadcastSyncState(isHeartbeat = false)
+        }
+        return next
+    }
+
+    fun notifyPlayerStateChanged(
+        positionMs: Long = lastSyncPositionMs,
+        durationMs: Long = lastSyncDurationMs,
+        speed: Float = lastSyncSpeed,
+    ) {
+        lastSyncPositionMs = positionMs.coerceAtLeast(0L)
+        if (durationMs > 0L) lastSyncDurationMs = durationMs
+        lastSyncSpeed = speed
+        broadcastSyncState(isHeartbeat = false)
+    }
+
+    private fun onRemoteSyncCommand(command: RemoteSyncCommand) {
+        viewModelScope.launch(Dispatchers.Main) {
+            when (command) {
+                is RemoteSyncCommand.RequestState -> {
+                    broadcastSyncState(isHeartbeat = false)
+                }
+                else -> {
+                    _remoteSyncCommands.tryEmit(command)
+                }
+            }
+        }
+    }
+
+    fun broadcastSyncState(
+        positionMs: Long = lastSyncPositionMs,
+        durationMs: Long = lastSyncDurationMs,
+        speed: Float = lastSyncSpeed,
+        isHeartbeat: Boolean = false,
+    ) {
+        val status = syncStatus.value
+        if (!status.running || status.connectedClientIp == null) return
+
+        val readyAlgos = JSONArray()
+        CompareAlgorithm.all.forEach { algo ->
+            if (_compareSlots.value[algo]?.isReady == true) {
+                readyAlgos.put(algo.id)
+            }
+        }
+
+        val selectedEventsArray = JSONArray()
+        _selectedEventIds.value.forEach { selectedEventsArray.put(it) }
+
+        val effectiveDuration = when {
+            durationMs > 0L -> durationMs
+            lastSyncDurationMs > 0L -> lastSyncDurationMs
+            _hapticTrackDurationMs.value > 0L -> _hapticTrackDurationMs.value
+            else -> 0L
+        }
+
+        val payload = JSONObject()
+            .put("type", if (isHeartbeat) "HEARTBEAT" else "STATE_SYNC")
+            .put("playing", _videoPlaying.value)
+            .put("timeMs", positionMs.coerceAtLeast(0L))
+            .put("durationMs", effectiveDuration)
+            .put("speed", speed.toDouble())
+            .put("activeAlgorithm", _activeCompareAlgorithm.value?.id ?: JSONObject.NULL)
+            .put("readyAlgorithms", readyAlgos)
+            .put("selectedEventIds", selectedEventsArray)
+            .put("videoName", _selectedVideoName.value ?: JSONObject.NULL)
+
+        syncServer.broadcastJson(payload)
     }
 
     fun setAmplitude(v: Int) {
@@ -285,6 +408,8 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
                         }
                     }.getOrDefault(emptyList())
                 }
+                _selectedEventIds.value = emptySet()
+                broadcastSyncState(isHeartbeat = false)
             } catch (throwable: Throwable) {
                 _videoError.value = throwable.message ?: throwable.toString()
             }
@@ -328,6 +453,8 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
                     loadCompareSlot(algorithm, uri)
                 }
                 _detectedEvents.value = events
+                _selectedEventIds.value = emptySet()
+                broadcastSyncState(isHeartbeat = false)
             } catch (throwable: Throwable) {
                 _folderSummary.value = null
                 _videoError.value = throwable.message ?: throwable.toString()
@@ -395,7 +522,10 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         _selectedVideoName.value = resolveDisplayName(app, uri)
         _videoError.value = null
         _detectedEvents.value = emptyList()
+        _selectedEventIds.value = emptySet()
+        lastSyncPositionMs = 0L
         takePersistableReadPermission(app, uri)
+        broadcastSyncState(positionMs = 0L, isHeartbeat = false)
     }
 
     fun loadVideoHapticWav(uri: Uri) {
@@ -437,6 +567,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
                 if (_activeCompareAlgorithm.value == algorithm) {
                     applyCompareSlot(algorithm, seekPositionMs = null)
                 }
+                broadcastSyncState(isHeartbeat = false)
             } catch (throwable: Throwable) {
                 if (compareLoadTokens[algorithm] == token) {
                     updateCompareSlot(algorithm) {
@@ -458,8 +589,10 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
         _activeCompareAlgorithm.value = algorithm
+        lastSyncPositionMs = positionMs.coerceAtLeast(0L)
         applyCompareSlot(algorithm, seekPositionMs = if (syncNow) positionMs else null)
         _videoError.value = null
+        broadcastSyncState(positionMs = positionMs, isHeartbeat = false)
     }
 
     fun hasAnyCompareSlotReady(): Boolean {
@@ -556,22 +689,37 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         stopAudio()
         _videoPlaying.value = true
         _videoError.value = null
+        broadcastSyncState(isHeartbeat = false)
     }
 
     fun pauseVideo() {
         _videoPlaying.value = false
         videoHaptic.stop()
+        broadcastSyncState(isHeartbeat = false)
     }
 
     fun stopVideo() {
         _videoPlaying.value = false
         videoHaptic.stop()
+        lastSyncPositionMs = 0L
+        broadcastSyncState(positionMs = 0L, isHeartbeat = false)
     }
 
-    fun onVideoPlaybackPosition(positionMs: Int, @Suppress("UNUSED_PARAMETER") videoDurationMs: Long = 0L) {
+    fun onVideoPlaybackPosition(positionMs: Int, videoDurationMs: Long = 0L) {
+        val posLong = positionMs.toLong().coerceAtLeast(0L)
+        lastSyncPositionMs = posLong
+        if (videoDurationMs > 0L) lastSyncDurationMs = videoDurationMs
+
         if (!_videoPlaying.value) return
-        if (!videoHaptic.hasLoadedTrack()) return
-        videoHaptic.updatePlaybackPosition(positionMs.toLong(), _amplitude.value)
+        if (videoHaptic.hasLoadedTrack()) {
+            videoHaptic.updatePlaybackPosition(posLong, _amplitude.value)
+        }
+
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastHeartbeatElapsedMs >= 200L) {
+            lastHeartbeatElapsedMs = now
+            broadcastSyncState(positionMs = posLong, durationMs = videoDurationMs, isHeartbeat = true)
+        }
     }
 
     fun hasLoadedHapticTrack(): Boolean = videoHaptic.hasLoadedTrack()
@@ -730,6 +878,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     override fun onCleared() {
+        syncServer.stop()
         audioHaptic.release()
         videoHaptic.release()
         stopTest()
