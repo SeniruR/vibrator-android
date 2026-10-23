@@ -70,6 +70,8 @@ import androidx.media3.ui.PlayerView
 import com.example.haptictester.haptic.CompareAlgorithm
 import com.example.haptictester.haptic.CompareSlotState
 import com.example.haptictester.haptic.HapticTrackFormat
+import com.example.haptictester.sync.RemoteSyncCommand
+import com.example.haptictester.sync.SyncServerStatus
 import com.example.haptictester.viewmodel.AudioDebugFrame
 import com.example.haptictester.viewmodel.HapticLibraryViewModel
 import com.example.haptictester.viewmodel.HapticViewModel
@@ -117,6 +119,8 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val demoVideoUri by viewModel.demoVideoUri.collectAsState()
     val folderSummary by viewModel.folderSummary.collectAsState()
     val detectedEvents by viewModel.detectedEvents.collectAsState()
+    val selectedEventIds by viewModel.selectedEventIds.collectAsState()
+    val syncStatus by viewModel.syncStatus.collectAsState()
 
     // Library Feature States
     val libraryViewModel: HapticLibraryViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
@@ -143,6 +147,8 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     var videoDurationMs by remember { mutableStateOf(0L) }
     var isVideoFullscreen by remember { mutableStateOf(false) }
     var pendingCompareAlgorithm by remember { mutableStateOf<CompareAlgorithm?>(null) }
+    var eventPlayStartMs by remember { mutableStateOf<Long?>(null) }
+    var eventPlayUntilMs by remember { mutableStateOf<Long?>(null) }
 
     val openAudioLauncher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
         if (uri != null) viewModel.loadAudio(uri)
@@ -184,7 +190,7 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
         !hapticTrackLoading &&
         (selectedHapticTrackName != null || hasCompareReady)
 
-    DisposableEffect(videoPlayer) {
+    DisposableEffect(videoPlayer, isVideoFullscreen) {
         val listener = object : Player.Listener {
             override fun onTracksChanged(tracks: Tracks) {
                 videoHasAudio = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO }
@@ -195,6 +201,20 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                     viewModel.playVideo()
                 } else if (!isPlaying && videoPlaying) {
                     viewModel.pauseVideo()
+                }
+            }
+
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int,
+            ) {
+                if (!isVideoFullscreen && reason == Player.DISCONTINUITY_REASON_SEEK) {
+                    viewModel.notifyPlayerStateChanged(
+                        positionMs = newPosition.positionMs.coerceAtLeast(0L),
+                        durationMs = videoDurationMs,
+                        speed = videoPlayer.playbackParameters.speed,
+                    )
                 }
             }
 
@@ -214,11 +234,149 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
         onDispose { videoPlayer.removeListener(listener) }
     }
 
-    LaunchedEffect(videoPlaying, loadedVideoUri, selectedHapticTrackName, isVideoFullscreen) {
+    // Handle remote commands from Desktop when not in fullscreen overlay
+    LaunchedEffect(viewModel, videoPlayer, isVideoFullscreen) {
+        if (isVideoFullscreen) return@LaunchedEffect
+        viewModel.remoteSyncCommands.collect { command ->
+            val chosen = detectedEvents.filter { it.id in viewModel.selectedEventIds.value }
+            val span = if (chosen.isNotEmpty()) {
+                val start = chosen.minOf { it.startMs }.coerceAtLeast(0L)
+                val end = chosen.maxOf { it.endMs }.coerceAtLeast(start + 200L)
+                start to end
+            } else {
+                null
+            }
+
+            when (command) {
+                is RemoteSyncCommand.Play -> {
+                    if (span != null && command.timeMs == null) {
+                        eventPlayStartMs = span.first
+                        eventPlayUntilMs = span.second
+                        val seekTo = (span.first - 500L).coerceAtLeast(0L)
+                        videoPlayer.seekTo(seekTo)
+                        viewModel.playVideo()
+                        videoPlayer.playWhenReady = true
+                        videoPlayer.play()
+                    } else {
+                        if (command.timeMs != null && kotlin.math.abs(videoPlayer.currentPosition - command.timeMs) > 120L) {
+                            videoPlayer.seekTo(command.timeMs)
+                        } else if (videoPlayer.playbackState == Player.STATE_ENDED) {
+                            videoPlayer.seekTo(0L)
+                        }
+                        viewModel.playVideo()
+                        videoPlayer.playWhenReady = true
+                        videoPlayer.play()
+                    }
+                }
+                is RemoteSyncCommand.Pause -> {
+                    videoPlayer.pause()
+                    viewModel.pauseVideo()
+                    if (command.timeMs != null && kotlin.math.abs(videoPlayer.currentPosition - command.timeMs) > 80L) {
+                        videoPlayer.seekTo(command.timeMs)
+                    }
+                    viewModel.notifyPlayerStateChanged(
+                        positionMs = command.timeMs ?: videoPlayer.currentPosition.coerceAtLeast(0L),
+                        durationMs = videoDurationMs,
+                        speed = videoPlayer.playbackParameters.speed,
+                    )
+                }
+                is RemoteSyncCommand.Seek -> {
+                    val target = command.timeMs.coerceAtLeast(0L)
+                    videoPlayer.seekTo(target)
+                    viewModel.onVideoPlaybackPosition(target.toInt(), videoDurationMs)
+                    viewModel.notifyPlayerStateChanged(
+                        positionMs = target,
+                        durationMs = videoDurationMs,
+                        speed = videoPlayer.playbackParameters.speed,
+                    )
+                }
+                is RemoteSyncCommand.SetSpeed -> {
+                    videoPlayer.setPlaybackSpeed(command.speed)
+                    viewModel.notifyPlayerStateChanged(
+                        positionMs = videoPlayer.currentPosition.coerceAtLeast(0L),
+                        durationMs = videoDurationMs,
+                        speed = command.speed,
+                    )
+                }
+                is RemoteSyncCommand.SelectAlgorithm -> {
+                    val algo = CompareAlgorithm.all.firstOrNull { it.id.equals(command.algorithmId, ignoreCase = true) }
+                    if (algo != null && compareSlots[algo]?.isReady == true) {
+                        if (span != null) {
+                            eventPlayStartMs = span.first
+                            eventPlayUntilMs = span.second
+                            viewModel.switchCompareSlot(algo, span.first, syncNow = false)
+                            val seekTo = (span.first - 500L).coerceAtLeast(0L)
+                            videoPlayer.seekTo(seekTo)
+                            viewModel.playVideo()
+                            videoPlayer.playWhenReady = true
+                            videoPlayer.play()
+                        } else {
+                            viewModel.switchCompareSlot(algo, videoPlayer.currentPosition.coerceAtLeast(0L))
+                        }
+                    }
+                }
+                is RemoteSyncCommand.ToggleEvent -> {
+                    val next = viewModel.toggleSelectedEvent(command.eventId, broadcast = true)
+                    eventPlayStartMs = null
+                    eventPlayUntilMs = null
+                    if (next.isEmpty()) {
+                        videoPlayer.seekTo(0L)
+                        viewModel.playVideo()
+                        videoPlayer.playWhenReady = true
+                        videoPlayer.play()
+                    } else if (!videoPlayer.isPlaying) {
+                        val start = detectedEvents.filter { it.id in next }.minOfOrNull { it.startMs }?.coerceAtLeast(0L) ?: 0L
+                        videoPlayer.seekTo(start)
+                        viewModel.notifyPlayerStateChanged(positionMs = start, durationMs = videoDurationMs)
+                    }
+                }
+                is RemoteSyncCommand.SetSelectedEvents -> {
+                    viewModel.setSelectedEventIds(command.eventIds, broadcast = true)
+                    val next = viewModel.selectedEventIds.value
+                    eventPlayStartMs = null
+                    eventPlayUntilMs = null
+                    if (next.isEmpty()) {
+                        videoPlayer.seekTo(0L)
+                        viewModel.playVideo()
+                        videoPlayer.playWhenReady = true
+                        videoPlayer.play()
+                    } else if (!videoPlayer.isPlaying) {
+                        val start = detectedEvents.filter { it.id in next }.minOfOrNull { it.startMs }?.coerceAtLeast(0L) ?: 0L
+                        videoPlayer.seekTo(start)
+                        viewModel.notifyPlayerStateChanged(positionMs = start, durationMs = videoDurationMs)
+                    }
+                }
+                RemoteSyncCommand.RequestState -> {
+                    viewModel.notifyPlayerStateChanged(
+                        positionMs = videoPlayer.currentPosition.coerceAtLeast(0L),
+                        durationMs = videoDurationMs,
+                        speed = videoPlayer.playbackParameters.speed,
+                    )
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(videoPlaying, loadedVideoUri, selectedHapticTrackName, isVideoFullscreen, eventPlayStartMs, eventPlayUntilMs) {
         if (!videoPlaying || isVideoFullscreen) return@LaunchedEffect
+        var armed = false
         while (isActive && videoPlaying) {
+            val pos = videoPlayer.currentPosition.coerceAtLeast(0L)
+            val until = eventPlayUntilMs
+            val start = eventPlayStartMs
+            if (until != null && start != null) {
+                if (!armed && pos + 250L >= start) armed = true
+                if (armed && pos >= until) {
+                    eventPlayStartMs = null
+                    eventPlayUntilMs = null
+                    videoPlayer.pause()
+                    viewModel.pauseVideo()
+                    viewModel.notifyPlayerStateChanged(positionMs = until, durationMs = videoDurationMs)
+                    return@LaunchedEffect
+                }
+            }
             viewModel.onVideoPlaybackPosition(
-                positionMs = videoPlayer.currentPosition.toInt(),
+                positionMs = pos.toInt(),
                 videoDurationMs = videoDurationMs,
             )
             delay(20)
@@ -281,6 +439,14 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                     .padding(vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                DesktopSyncCard(
+                    status = syncStatus,
+                    selectedEventCount = selectedEventIds.size,
+                    onStartSync = { viewModel.startDesktopSync() },
+                    onStopSync = { viewModel.stopDesktopSync() },
+                    onRefreshIps = { viewModel.refreshSyncIps() },
+                )
+
                 IntensityCapCard(
                     amplitude = amplitude,
                     hasAmplitude = hasAmplitude,
@@ -441,6 +607,106 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                 showLibraryDialog = false
             }
         )
+    }
+}
+
+@Composable
+private fun DesktopSyncCard(
+    status: SyncServerStatus,
+    selectedEventCount: Int,
+    onStartSync: () -> Unit,
+    onStopSync: () -> Unit,
+    onRefreshIps: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (status.connectedClientIp != null) {
+                Color(0xFF143828)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            },
+        ),
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Haptic Studio Desktop Sync",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (status.connectedClientIp != null) Color(0xFF81F4B6) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = when {
+                            status.connectedClientIp != null ->
+                                "Connected to Desktop (${status.connectedClientIp})" +
+                                    if (selectedEventCount > 0) " · $selectedEventCount event(s) ticked" else ""
+                            status.running -> "Waiting for Haptic Studio connection on Hotspot / LAN…"
+                            else -> "Off (0% background battery usage when disabled)"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (status.connectedClientIp != null) {
+                            Color.White.copy(alpha = 0.9f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                        },
+                    )
+                }
+                if (status.running) {
+                    OutlinedButton(onClick = onStopSync) {
+                        Text("Stop Sync")
+                    }
+                } else {
+                    Button(onClick = onStartSync) {
+                        Text("Enable Sync")
+                    }
+                }
+            }
+
+            if (status.running) {
+                val ipListText = if (status.localIps.isNotEmpty()) {
+                    status.localIps.joinToString("  |  ") { "$it:${status.port}" }
+                } else {
+                    "Turn on Wi-Fi Hotspot or Wi-Fi, then tap Refresh IP (Port ${status.port})"
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Phone IP: $ipListText",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            color = if (status.connectedClientIp != null) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = "4-Digit Pairing PIN: ${status.pin}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (status.connectedClientIp != null) Color(0xFF81F4B6) else MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    OutlinedButton(onClick = onRefreshIps) {
+                        Text("Refresh IP")
+                    }
+                }
+            }
+
+            if (status.error != null) {
+                Text(
+                    text = status.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
     }
 }
 

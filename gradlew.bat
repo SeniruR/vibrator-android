@@ -6,8 +6,7 @@ set GRADLE_VERSION=8.7
 set GRADLE_DIR=%SCRIPT_DIR%.gradle-wrapper\gradle-%GRADLE_VERSION%
 
 if not exist "%GRADLE_DIR%\bin\gradle.bat" (
-  echo Gradle %GRADLE_VERSION% not found - downloading...
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "$d='%SCRIPT_DIR%.gradle-wrapper'; New-Item -ItemType Directory -Path $d -Force | Out-Null; $z=Join-Path $d 'gradle-%GRADLE_VERSION%.zip'; Invoke-WebRequest -Uri 'https://services.gradle.org/distributions/gradle-%GRADLE_VERSION%-bin.zip' -OutFile $z -UseBasicParsing; Expand-Archive -Path $z -DestinationPath $d -Force; Remove-Item $z -Force"
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "$d='%SCRIPT_DIR%.gradle-wrapper'; New-Item -ItemType Directory -Path $d -Force | Out-Null; $cached=Get-ChildItem -Path (Join-Path $env:USERPROFILE '.gradle\wrapper\dists\gradle-%GRADLE_VERSION%-bin') -Directory -Recurse -Filter 'gradle-%GRADLE_VERSION%' -ErrorAction SilentlyContinue | Select-Object -First 1; if ($cached -and (Test-Path (Join-Path $cached.FullName 'bin\gradle.bat'))) { Write-Host 'Using cached Gradle %GRADLE_VERSION%...'; Copy-Item -Path $cached.FullName -Destination (Join-Path $d 'gradle-%GRADLE_VERSION%') -Recurse -Force } else { Write-Host 'Gradle %GRADLE_VERSION% not found - downloading...'; $z=Join-Path $d 'gradle-%GRADLE_VERSION%.zip'; Invoke-WebRequest -Uri 'https://services.gradle.org/distributions/gradle-%GRADLE_VERSION%-bin.zip' -OutFile $z -UseBasicParsing; Expand-Archive -Path $z -DestinationPath $d -Force; Remove-Item $z -Force }"
   if errorlevel 1 exit /b 1
 )
 
