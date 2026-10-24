@@ -20,6 +20,7 @@ import com.example.haptictester.haptic.CompareAlgorithm
 import com.example.haptictester.haptic.CompareSlotState
 import com.example.haptictester.haptic.DetectedEvent
 import com.example.haptictester.haptic.DetectedEvents
+import com.example.haptictester.haptic.EventPlaylist
 import com.example.haptictester.haptic.HapticFolderMatcher
 import com.example.haptictester.haptic.HapticController
 import com.example.haptictester.haptic.HapticTrackFormat
@@ -148,6 +149,34 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _detectedEvents = MutableStateFlow<List<DetectedEvent>>(emptyList())
     val detectedEvents = _detectedEvents.asStateFlow()
+
+    // Playlist edits for the loaded events: switched-off events and play-together groups
+    private val _disabledEventIds = MutableStateFlow<Set<String>>(emptySet())
+    val disabledEventIds = _disabledEventIds.asStateFlow()
+
+    private val _togetherGroups = MutableStateFlow<List<Set<String>>>(emptyList())
+    val togetherGroups = _togetherGroups.asStateFlow()
+
+    fun setEventEnabled(id: String, enabled: Boolean) {
+        _disabledEventIds.value = if (enabled) _disabledEventIds.value - id else _disabledEventIds.value + id
+    }
+
+    fun playEventsTogether(ids: Set<String>) {
+        _togetherGroups.value = EventPlaylist.join(_togetherGroups.value, ids - _disabledEventIds.value)
+    }
+
+    fun splitEvents(ids: Set<String>) {
+        _togetherGroups.value = EventPlaylist.split(_togetherGroups.value, ids)
+    }
+
+    /** Events and playlist stored with a library group. Call after loadVideo, which clears both. */
+    fun applySavedEvents(events: List<DetectedEvent>, playlist: List<List<String>>?) {
+        _detectedEvents.value = events
+        val (disabled, groups) = playlist?.let { EventPlaylist.editsFor(events, it) }
+            ?: (emptySet<String>() to emptyList())
+        _disabledEventIds.value = disabled
+        _togetherGroups.value = groups
+    }
 
     init {
         pushAudioTuning()
@@ -395,6 +424,8 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         _selectedVideoName.value = resolveDisplayName(app, uri)
         _videoError.value = null
         _detectedEvents.value = emptyList()
+        _disabledEventIds.value = emptySet()
+        _togetherGroups.value = emptyList()
         takePersistableReadPermission(app, uri)
     }
 

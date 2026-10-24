@@ -19,6 +19,10 @@ data class SavedFileGroup(
     val pipelineEventsUriString: String? = null,
     val pipelineEventsName: String? = null,
     val timestampMs: Long = System.currentTimeMillis(), // Keeps newest items at the top
+    // Stored here, not as a file link: a folder's events.json is not readable again after restart
+    val events: List<DetectedEvent> = emptyList(),
+    /** See [EventPlaylist]; null shows every event. */
+    val playlist: List<List<String>>? = null,
 )
 
 class HapticLibraryRepository(context: Context) {
@@ -49,6 +53,8 @@ class HapticLibraryRepository(context: Context) {
                     pipelineEventsUriString = obj.optString("pipelineEventsUriString").takeIf { !it.isNullOrBlank() },
                     pipelineEventsName = obj.optString("pipelineEventsName").takeIf { !it.isNullOrBlank() },
                     timestampMs = obj.optLong("timestampMs", System.currentTimeMillis()),
+                    events = readEvents(obj.optJSONArray("events")),
+                    playlist = readPlaylist(obj.optJSONArray("playlist")),
                 )
             }
             list.sortedByDescending { it.timestampMs }
@@ -82,9 +88,50 @@ class HapticLibraryRepository(context: Context) {
                 put("pipelineEventsUriString", item.pipelineEventsUriString)
                 put("pipelineEventsName", item.pipelineEventsName)
                 put("timestampMs", item.timestampMs)
+                put("events", writeEvents(item.events))
+                item.playlist?.let { put("playlist", writePlaylist(it)) }
             }
             array.put(obj)
         }
         prefs.edit { putString("saved_groups", array.toString()) }
+    }
+
+    private fun writeEvents(events: List<DetectedEvent>): JSONArray = JSONArray().apply {
+        events.forEach { event ->
+            put(
+                JSONObject()
+                    .put("id", event.id)
+                    .put("label", event.label)
+                    .put("category", event.category)
+                    .put("startMs", event.startMs)
+                    .put("endMs", event.endMs),
+            )
+        }
+    }
+
+    private fun readEvents(array: JSONArray?): List<DetectedEvent> {
+        if (array == null) return emptyList()
+        return (0 until array.length()).mapNotNull { i ->
+            val obj = array.optJSONObject(i) ?: return@mapNotNull null
+            DetectedEvent(
+                id = obj.optString("id"),
+                label = obj.optString("label"),
+                category = obj.optString("category"),
+                startMs = obj.optLong("startMs"),
+                endMs = obj.optLong("endMs"),
+            )
+        }
+    }
+
+    private fun writePlaylist(playlist: List<List<String>>): JSONArray = JSONArray().apply {
+        playlist.forEach { ids -> put(JSONArray(ids)) }
+    }
+
+    private fun readPlaylist(array: JSONArray?): List<List<String>>? {
+        if (array == null) return null
+        return (0 until array.length()).mapNotNull { i ->
+            val ids = array.optJSONArray(i) ?: return@mapNotNull null
+            (0 until ids.length()).map { ids.getString(it) }
+        }
     }
 }

@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.haptictester.haptic.DetectedEvent
 import com.example.haptictester.haptic.SavedFileGroup
 import com.example.haptictester.viewmodel.HapticLibraryViewModel
 
@@ -44,6 +45,8 @@ fun HapticLibraryDialogs(
     slotEUri: Uri?,
     pipelineEventsUri: Uri?,
     pipelineEventsName: String?,
+    events: List<DetectedEvent>,
+    eventPlaylist: List<List<String>>,
     onLoadGroup: (SavedFileGroup) -> Unit
 ) {
     val savedGroups by libraryViewModel.savedGroups.collectAsState()
@@ -69,6 +72,10 @@ fun HapticLibraryDialogs(
                                 Column(modifier = Modifier.padding(10.dp)) {
                                     Text(group.name, fontWeight = FontWeight.Bold)
                                     Text("Video: ${group.videoName ?: "None"}", style = MaterialTheme.typography.bodySmall)
+                                    if (group.events.isNotEmpty()) {
+                                        val entries = group.playlist?.size ?: group.events.size
+                                        Text("Events: $entries to play", style = MaterialTheme.typography.bodySmall)
+                                    }
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
                                         Button(
                                             onClick = { onLoadGroup(group) },
@@ -105,6 +112,22 @@ fun HapticLibraryDialogs(
                         placeholder = { Text("e.g., Action Scene Test") },
                         singleLine = true
                     )
+                    if (events.isNotEmpty()) {
+                        val together = eventPlaylist.count { it.size > 1 }
+                        val off = events.size - eventPlaylist.sumOf { it.size }
+                        Text(
+                            "Event playlist: ${eventPlaylist.size} to play" +
+                                (if (together > 0) " · $together played together" else "") +
+                                (if (off > 0) " · $off off" else ""),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            "Switch events off or play them together in Fullscreen › ! › Edit, with the video.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -121,7 +144,9 @@ fun HapticLibraryDialogs(
                                 slotDUri = slotDUri,
                                 slotEUri = slotEUri,
                                 pipelineEventsUri = pipelineEventsUri,
-                                pipelineEventsName = pipelineEventsName
+                                pipelineEventsName = pipelineEventsName,
+                                events = events,
+                                playlist = eventPlaylist.takeIf { events.isNotEmpty() },
                             )
                             saveGroupNameInput = ""
                             onDismissSave()

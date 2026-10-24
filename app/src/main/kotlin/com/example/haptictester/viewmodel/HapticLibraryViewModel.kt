@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.haptictester.haptic.DetectedEvent
 import com.example.haptictester.haptic.HapticLibraryRepository
 import com.example.haptictester.haptic.SavedFileGroup
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,7 +29,9 @@ class HapticLibraryViewModel(application: Application) : AndroidViewModel(applic
         slotDUri: Uri?,
         slotEUri: Uri?,
         pipelineEventsUri: Uri?,
-        pipelineEventsName: String?
+        pipelineEventsName: String?,
+        events: List<DetectedEvent> = emptyList(),
+        playlist: List<List<String>>? = null,
     ) {
         viewModelScope.launch {
             val group = SavedFileGroup(
@@ -41,7 +44,9 @@ class HapticLibraryViewModel(application: Application) : AndroidViewModel(applic
                 slotDUriString = slotDUri?.toString(),
                 slotEUriString = slotEUri?.toString(),
                 pipelineEventsUriString = pipelineEventsUri?.toString(),
-                pipelineEventsName = pipelineEventsName
+                pipelineEventsName = pipelineEventsName,
+                events = events,
+                playlist = playlist,
             )
             repository.saveGroup(group)
             _savedGroups.value = repository.getSavedGroups() // Refresh UI list

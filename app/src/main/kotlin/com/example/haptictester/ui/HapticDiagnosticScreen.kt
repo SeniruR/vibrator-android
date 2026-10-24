@@ -69,6 +69,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.example.haptictester.haptic.CompareAlgorithm
 import com.example.haptictester.haptic.CompareSlotState
+import com.example.haptictester.haptic.EventPlaylist
 import com.example.haptictester.haptic.HapticTrackFormat
 import com.example.haptictester.viewmodel.AudioDebugFrame
 import com.example.haptictester.viewmodel.HapticLibraryViewModel
@@ -117,6 +118,11 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val demoVideoUri by viewModel.demoVideoUri.collectAsState()
     val folderSummary by viewModel.folderSummary.collectAsState()
     val detectedEvents by viewModel.detectedEvents.collectAsState()
+    val disabledEventIds by viewModel.disabledEventIds.collectAsState()
+    val togetherGroups by viewModel.togetherGroups.collectAsState()
+    val eventPlaylist = remember(detectedEvents, disabledEventIds, togetherGroups) {
+        EventPlaylist.build(detectedEvents, disabledEventIds, togetherGroups)
+    }
 
     // Library Feature States
     val libraryViewModel: HapticLibraryViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
@@ -423,6 +429,8 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
             slotEUri = compareSlots[CompareAlgorithm.E]?.uri,
             pipelineEventsUri = null,
             pipelineEventsName = null,
+            events = detectedEvents,
+            eventPlaylist = eventPlaylist,
             onLoadGroup = { group ->
                 // 1. Load video
                 group.videoUriString?.let { uriString ->
@@ -437,6 +445,9 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                 group.slotCUriString?.let { viewModel.loadCompareSlot(CompareAlgorithm.C, Uri.parse(it)) }
                 group.slotDUriString?.let { viewModel.loadCompareSlot(CompareAlgorithm.D, Uri.parse(it)) }
                 group.slotEUriString?.let { viewModel.loadCompareSlot(CompareAlgorithm.E, Uri.parse(it)) }
+
+                // 3. Events and their saved playlist (loadVideo above cleared the old ones)
+                viewModel.applySavedEvents(group.events, group.playlist)
 
                 showLibraryDialog = false
             }

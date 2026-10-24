@@ -36,10 +36,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -65,6 +67,8 @@ import androidx.media3.ui.PlayerView
 import com.example.haptictester.haptic.CompareAlgorithm
 import com.example.haptictester.haptic.CompareSlotState
 import com.example.haptictester.haptic.DetectedEvent
+import com.example.haptictester.haptic.EventItem
+import com.example.haptictester.haptic.EventPlaylist
 import com.example.haptictester.haptic.HapticMapData
 import com.example.haptictester.viewmodel.HapticViewModel
 import kotlinx.coroutines.delay
@@ -80,6 +84,13 @@ fun VideoCompareFullscreenOverlay(
     detectedEvents: List<DetectedEvent>,
     onDismiss: () -> Unit,
 ) {
+    val disabledEventIds by viewModel.disabledEventIds.collectAsState()
+    val togetherGroups by viewModel.togetherGroups.collectAsState()
+    val isPlaylist = disabledEventIds.isNotEmpty() || togetherGroups.isNotEmpty()
+    val eventItems = remember(detectedEvents, disabledEventIds, togetherGroups) {
+        EventPlaylist.items(detectedEvents, EventPlaylist.build(detectedEvents, disabledEventIds, togetherGroups))
+    }
+    var editTickedIds by remember { mutableStateOf(setOf<String>()) }
     val view = LocalView.current
     val context = LocalContext.current
     val activity = context as Activity
@@ -195,7 +206,7 @@ fun VideoCompareFullscreenOverlay(
 
     fun playSpanOnce(startMs: Long, endMs: Long, algorithm: CompareAlgorithm?) {
         val start = startMs.coerceAtLeast(0L)
-        val end = endMs.coerceAtLeast(start + 200L)
+        val end = endMs.coerceAtLeast(start + 200L) + EVENT_POSTROLL_MS
         eventPlayStartMs = start
         eventPlayUntilMs = end
         eventPlayToken++
@@ -204,8 +215,8 @@ fun VideoCompareFullscreenOverlay(
         if (algorithm != null) {
             viewModel.switchCompareSlot(algorithm, start, syncNow = false)
         }
-        // The decoder needs a moment after a seek; starting a little early lets the
-        // picture be moving by the time the event begins.
+        // A second of context on each side, so the event is felt in its scene
+        // (and the decoder is past its seek by the time the event begins).
         val seekTo = (start - EVENT_PREROLL_MS).coerceAtLeast(0L)
         pendingSeekTargetMs = seekTo
         videoPlayer.seekTo(seekTo)
@@ -225,11 +236,12 @@ fun VideoCompareFullscreenOverlay(
         videoPlayer.play()
     }
 
-    fun toggleEvent(event: DetectedEvent) {
-        val next = if (event.id in selectedEventIds) {
-            selectedEventIds - event.id
+    fun toggleItem(item: EventItem) {
+        val ids = item.eventIds.toSet()
+        val next = if (selectedEventIds.containsAll(ids)) {
+            selectedEventIds - ids
         } else {
-            selectedEventIds + event.id
+            selectedEventIds + ids
         }
         selectedEventIds = next
         eventPlayStartMs = null
@@ -471,9 +483,37 @@ fun VideoCompareFullscreenOverlay(
                     compareSlots = compareSlots,
                     positionMs = positionMs,
                     durationMs = durationMs,
-                    events = detectedEvents,
+                    items = eventItems,
+                    isPlaylist = isPlaylist,
                     selectedEventIds = selectedEventIds,
-                    onToggleEvent = ::toggleEvent,
+                    onToggleItem = ::toggleItem,
+                    allEvents = detectedEvents,
+                    disabledEventIds = disabledEventIds,
+                    togetherGroups = togetherGroups,
+                    editTickedIds = editTickedIds,
+                    onToggleEnabled = { event ->
+                        val enable = event.id in disabledEventIds
+                        viewModel.setEventEnabled(event.id, enable)
+                        if (!enable) {
+                            selectedEventIds = selectedEventIds - event.id
+                            editTickedIds = editTickedIds - event.id
+                        }
+                    },
+                    onToggleEditTick = { event ->
+                        editTickedIds = if (event.id in editTickedIds) editTickedIds - event.id else editTickedIds + event.id
+                    },
+                    onPlayTogether = {
+                        viewModel.playEventsTogether(editTickedIds)
+                        editTickedIds = emptySet()
+                    },
+                    onSplit = {
+                        viewModel.splitEvents(editTickedIds)
+                        editTickedIds = emptySet()
+                    },
+                    onPreview = { start, end ->
+                        keepControlsVisible()
+                        playSpanOnce(start, end, activeAlgorithm)
+                    },
                     onToggleControls = {
                         controlsVisible = !controlsVisible
                         interactionRevision++
@@ -485,7 +525,9 @@ fun VideoCompareFullscreenOverlay(
     }
 }
 
-private const val EVENT_PREROLL_MS = 500L
+// Played around every event so it is seen and felt in context
+private const val EVENT_PREROLL_MS = 1_000L
+private const val EVENT_POSTROLL_MS = 1_000L
 
 private fun knownDurationMs(player: Player): Long = player.duration.coerceAtLeast(0L)
 
@@ -514,9 +556,19 @@ private fun DebugSidePanel(
     compareSlots: Map<CompareAlgorithm, CompareSlotState>,
     positionMs: Long,
     durationMs: Long,
-    events: List<DetectedEvent>,
+    items: List<EventItem>,
+    isPlaylist: Boolean,
     selectedEventIds: Set<String>,
-    onToggleEvent: (DetectedEvent) -> Unit,
+    onToggleItem: (EventItem) -> Unit,
+    allEvents: List<DetectedEvent>,
+    disabledEventIds: Set<String>,
+    togetherGroups: List<Set<String>>,
+    editTickedIds: Set<String>,
+    onToggleEnabled: (DetectedEvent) -> Unit,
+    onToggleEditTick: (DetectedEvent) -> Unit,
+    onPlayTogether: () -> Unit,
+    onSplit: () -> Unit,
+    onPreview: (Long, Long) -> Unit,
     onToggleControls: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -529,8 +581,22 @@ private fun DebugSidePanel(
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 DebugTab("Live WAV", selected = tab == 0, onClick = { tab = 0 })
                 DebugTab("Events", selected = tab == 1, onClick = { tab = 1 })
+                DebugTab("Edit", selected = tab == 2, onClick = { tab = 2 })
             }
-            if (tab == 0) {
+            if (tab == 2) {
+                EventEditTab(
+                    events = allEvents,
+                    disabled = disabledEventIds,
+                    groups = togetherGroups,
+                    ticked = editTickedIds,
+                    onToggleEnabled = onToggleEnabled,
+                    onToggleTick = onToggleEditTick,
+                    onPlayTogether = onPlayTogether,
+                    onSplit = onSplit,
+                    onPreview = onPreview,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                )
+            } else if (tab == 0) {
                 LiveWavTab(
                     compareSlots = compareSlots,
                     positionMs = positionMs,
@@ -540,10 +606,11 @@ private fun DebugSidePanel(
                 )
             } else {
                 EventListTab(
-                    events = events,
+                    items = items,
+                    isPlaylist = isPlaylist,
                     compareSlots = compareSlots,
                     selectedEventIds = selectedEventIds,
-                    onToggleEvent = onToggleEvent,
+                    onToggleItem = onToggleItem,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }
@@ -626,16 +693,18 @@ private fun LiveWavTab(
 
 @Composable
 private fun EventListTab(
-    events: List<DetectedEvent>,
+    items: List<EventItem>,
+    isPlaylist: Boolean,
     compareSlots: Map<CompareAlgorithm, CompareSlotState>,
     selectedEventIds: Set<String>,
-    onToggleEvent: (DetectedEvent) -> Unit,
+    onToggleItem: (EventItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val chosen = events.filter { it.id in selectedEventIds }
+    val chosen = items.filter { selectedEventIds.containsAll(it.eventIds) }
+    val noun = if (isPlaylist) "in the playlist" else "events"
     val summary = when {
-        events.isEmpty() -> "No events in this folder"
-        chosen.isEmpty() -> "${events.size} events · tick the ones to play"
+        items.isEmpty() -> if (isPlaylist) "Nothing left to play in this playlist" else "No events in this folder"
+        chosen.isEmpty() -> "${items.size} $noun · tick the ones to play"
         else -> {
             val start = chosen.minOf { it.startMs }
             val end = chosen.maxOf { it.endMs }
@@ -652,12 +721,12 @@ private fun EventListTab(
             modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            events.forEach { event ->
+            items.forEach { item ->
                 EventRow(
-                    event = event,
+                    item = item,
                     compareSlots = compareSlots,
-                    selected = event.id in selectedEventIds,
-                    onToggle = { onToggleEvent(event) },
+                    selected = selectedEventIds.containsAll(item.eventIds),
+                    onToggle = { onToggleItem(item) },
                 )
             }
         }
@@ -666,7 +735,7 @@ private fun EventListTab(
 
 @Composable
 private fun EventRow(
-    event: DetectedEvent,
+    item: EventItem,
     compareSlots: Map<CompareAlgorithm, CompareSlotState>,
     selected: Boolean,
     onToggle: () -> Unit,
@@ -692,9 +761,9 @@ private fun EventRow(
                 ),
             )
             Column(modifier = Modifier.weight(1f)) {
-                Text(event.label, color = Color.White, style = MaterialTheme.typography.labelMedium)
+                Text(item.label, color = Color.White, style = MaterialTheme.typography.labelMedium)
                 Text(
-                    "${formatEventSpan(event.startMs, event.endMs)} · ${event.category.ifBlank { event.id }}",
+                    "${formatEventSpan(item.startMs, item.endMs)} · ${item.category.ifBlank { item.eventIds.first() }}",
                     color = Color.White.copy(alpha = 0.7f),
                     style = MaterialTheme.typography.labelSmall,
                 )
@@ -710,8 +779,8 @@ private fun EventRow(
                                 positionMs = 0L,
                                 durationMs = map.durationMs,
                                 color = color,
-                                windowStartMs = event.startMs,
-                                windowEndMs = event.endMs,
+                                windowStartMs = item.startMs,
+                                windowEndMs = item.endMs,
                                 drawCursor = false,
                                 modifier = Modifier.width(28.dp).height(22.dp),
                             )
@@ -726,6 +795,149 @@ private fun EventRow(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Playlist editing next to the video: switch events off, tick events and play them
+ * together as one entry (or split them again), and preview any event or the ticked
+ * span with the selected haptic before saving the library group.
+ */
+@Composable
+private fun EventEditTab(
+    events: List<DetectedEvent>,
+    disabled: Set<String>,
+    groups: List<Set<String>>,
+    ticked: Set<String>,
+    onToggleEnabled: (DetectedEvent) -> Unit,
+    onToggleTick: (DetectedEvent) -> Unit,
+    onPlayTogether: () -> Unit,
+    onSplit: () -> Unit,
+    onPreview: (Long, Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val ordered = remember(events) { events.sortedBy { it.startMs } }
+    val playlist = EventPlaylist.build(events, disabled, groups)
+    val together = playlist.count { it.size > 1 }
+    val tickedEvents = ordered.filter { it.id in ticked }
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = if (events.isEmpty()) {
+                "No events in this folder"
+            } else {
+                "${playlist.size} to play" +
+                    (if (together > 0) " · $together together" else "") +
+                    (if (disabled.isNotEmpty()) " · ${disabled.size} off" else "")
+            },
+            color = Color.White.copy(alpha = 0.72f),
+            style = MaterialTheme.typography.labelSmall,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            EditActionButton("Together", enabled = (ticked - disabled).size >= 2, onClick = onPlayTogether)
+            EditActionButton("Split", enabled = groups.any { g -> g.any { it in ticked } }, onClick = onSplit)
+            EditActionButton("▶ Ticked", enabled = tickedEvents.isNotEmpty()) {
+                onPreview(tickedEvents.minOf { it.startMs }, tickedEvents.maxOf { it.endMs })
+            }
+        }
+        Column(
+            modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            ordered.forEach { event ->
+                val group = groups.indexOfFirst { event.id in it }
+                EventEditRow(
+                    event = event,
+                    on = event.id !in disabled,
+                    ticked = event.id in ticked,
+                    groupNumber = if (group >= 0) group + 1 else null,
+                    onToggleEnabled = { onToggleEnabled(event) },
+                    onToggleTick = { onToggleTick(event) },
+                    onPreview = { onPreview(event.startMs, event.endMs) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EditActionButton(label: String, enabled: Boolean, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+    ) {
+        Text(
+            label,
+            color = if (enabled) Color.White else Color.White.copy(alpha = 0.35f),
+            style = MaterialTheme.typography.labelSmall,
+        )
+    }
+}
+
+@Composable
+private fun EventEditRow(
+    event: DetectedEvent,
+    on: Boolean,
+    ticked: Boolean,
+    groupNumber: Int?,
+    onToggleEnabled: () -> Unit,
+    onToggleTick: () -> Unit,
+    onPreview: () -> Unit,
+) {
+    val textAlpha = if (on) 1f else 0.4f
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(6.dp),
+        color = when {
+            ticked -> Color(0xFF24506A)
+            on -> Color(0xFF18222C)
+            else -> Color(0xFF11171E)
+        },
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 2.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Checkbox(
+                checked = ticked,
+                onCheckedChange = { onToggleTick() },
+                enabled = on,
+                modifier = Modifier.size(32.dp),
+                colors = CheckboxDefaults.colors(
+                    checkedColor = Color(0xFF59B7F2),
+                    uncheckedColor = Color.White.copy(alpha = 0.75f),
+                    checkmarkColor = Color(0xFF101720),
+                ),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    event.label,
+                    color = Color.White.copy(alpha = textAlpha),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                Text(
+                    "${formatEventSpan(event.startMs, event.endMs)} · ${event.category.ifBlank { event.id }}" +
+                        (groupNumber?.let { " · together $it" } ?: "") +
+                        (if (on) "" else " · off"),
+                    color = Color.White.copy(alpha = 0.7f * textAlpha),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+            Surface(
+                modifier = Modifier.clickable(onClick = onPreview),
+                shape = RoundedCornerShape(50),
+                color = Color(0xFF2C4A63),
+            ) {
+                Text(
+                    "▶",
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+            Switch(checked = on, onCheckedChange = { onToggleEnabled() })
         }
     }
 }
