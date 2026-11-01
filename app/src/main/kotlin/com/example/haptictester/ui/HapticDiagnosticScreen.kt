@@ -29,6 +29,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -120,6 +122,8 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val folderSummary by viewModel.folderSummary.collectAsState()
     val detectedEvents by viewModel.detectedEvents.collectAsState()
     val selectedEventIds by viewModel.selectedEventIds.collectAsState()
+    val availableEventFiles by viewModel.availableEventFiles.collectAsState()
+    val activeEventFileName by viewModel.activeEventFileName.collectAsState()
     val syncStatus by viewModel.syncStatus.collectAsState()
     val syncRootFolderName by viewModel.syncRootFolderName.collectAsState()
     val activeBundleId by viewModel.activeBundleId.collectAsState()
@@ -365,7 +369,17 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                     eventPlayUntilMs = null
                     videoPlayer.pause()
                     viewModel.pauseVideo()
-                    viewModel.loadBundleById(command.bundleId)
+                    viewModel.loadBundleById(command.bundleId, command.eventFileName)
+                }
+                is RemoteSyncCommand.SelectEventFile -> {
+                    eventPlayStartMs = null
+                    eventPlayUntilMs = null
+                    viewModel.selectEventFile(command.fileName, broadcast = false)
+                }
+                is RemoteSyncCommand.DeleteEventFile -> {
+                    eventPlayStartMs = null
+                    eventPlayUntilMs = null
+                    viewModel.deleteEventFile(command.fileName, broadcast = false)
                 }
                 is RemoteSyncCommand.ClearMedia -> {
                     eventPlayStartMs = null
@@ -500,6 +514,9 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                         hapticTrackLoading = hapticTrackLoading,
                         compareSlots = compareSlots,
                         activeCompareAlgorithm = activeCompareAlgorithm,
+                        availableEventFiles = availableEventFiles,
+                        activeEventFileName = activeEventFileName,
+                        eventCount = detectedEvents.size,
                         canPlayVideo = canPlayVideo,
                         videoPlaying = videoPlaying,
                         videoPrepared = videoPrepared,
@@ -520,6 +537,11 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                         },
                         onSwitchCompareSlot = { algorithm ->
                             viewModel.switchCompareSlot(algorithm, videoPlayer.currentPosition)
+                        },
+                        onSelectEventFile = { fileName ->
+                            eventPlayStartMs = null
+                            eventPlayUntilMs = null
+                            viewModel.selectEventFile(fileName, broadcast = true)
                         },
                         onPlayVideo = {
                             viewModel.playVideo()
@@ -852,6 +874,9 @@ private fun VideoTab(
     hapticTrackLoading: Boolean,
     compareSlots: Map<CompareAlgorithm, CompareSlotState>,
     activeCompareAlgorithm: CompareAlgorithm?,
+    availableEventFiles: List<String>,
+    activeEventFileName: String,
+    eventCount: Int,
     canPlayVideo: Boolean,
     videoPlaying: Boolean,
     videoPrepared: Boolean,
@@ -868,6 +893,7 @@ private fun VideoTab(
     onSelectWav: () -> Unit,
     onLoadCompareSlot: (CompareAlgorithm) -> Unit,
     onSwitchCompareSlot: (CompareAlgorithm) -> Unit,
+    onSelectEventFile: (String) -> Unit,
     onPlayVideo: () -> Unit,
     onPauseVideo: () -> Unit,
     onStopVideo: () -> Unit,
@@ -876,6 +902,8 @@ private fun VideoTab(
     onOpenLibrary: () -> Unit,
     onSaveLibrary: () -> Unit,
 ) {
+    var eventDropdownExpanded by remember { mutableStateOf(false) }
+
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Synced Video Playback", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -905,6 +933,41 @@ private fun VideoTab(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("Save Current Files to Library")
+            }
+
+            if (availableEventFiles.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Events ($eventCount):",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Box {
+                        OutlinedButton(
+                            onClick = { eventDropdownExpanded = true },
+                        ) {
+                            Text("${formatEventFileDisplayName(activeEventFileName)} ▾")
+                        }
+                        DropdownMenu(
+                            expanded = eventDropdownExpanded,
+                            onDismissRequest = { eventDropdownExpanded = false },
+                        ) {
+                            availableEventFiles.forEach { fileName ->
+                                DropdownMenuItem(
+                                    text = { Text(formatEventFileDisplayName(fileName)) },
+                                    onClick = {
+                                        eventDropdownExpanded = false
+                                        onSelectEventFile(fileName)
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             Text("Algorithm compare (WAV)", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)

@@ -27,7 +27,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DropdownMenu
@@ -53,6 +52,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
@@ -119,6 +119,8 @@ fun VideoCompareFullscreenOverlay(
     var speedMenuExpanded by remember { mutableStateOf(false) }
     var debugVisible by remember { mutableStateOf(false) }
     val selectedEventIds by viewModel.selectedEventIds.collectAsState()
+    val availableEventFiles by viewModel.availableEventFiles.collectAsState()
+    val activeEventFileName by viewModel.activeEventFileName.collectAsState()
     var eventPlayStartMs by remember { mutableStateOf<Long?>(null) }
     var eventPlayUntilMs by remember { mutableStateOf<Long?>(null) }
     var eventPlayToken by remember { mutableIntStateOf(0) }
@@ -262,6 +264,17 @@ fun VideoCompareFullscreenOverlay(
         applyEventSelectionAfterChange(next)
     }
 
+    fun jumpToEvent(event: DetectedEvent) {
+        val target = event.startMs.coerceIn(0L, durationMs.coerceAtLeast(1L))
+        eventPlayStartMs = null
+        eventPlayUntilMs = null
+        pendingSeekTargetMs = target
+        positionMs = target
+        videoPlayer.seekTo(target)
+        viewModel.onVideoPlaybackPosition(target.toInt(), durationMs)
+        viewModel.notifyPlayerStateChanged(positionMs = target, durationMs = durationMs, speed = selectedSpeed)
+    }
+
     LaunchedEffect(viewModel, videoPlayer) {
         viewModel.remoteSyncCommands.collect { command ->
             when (command) {
@@ -337,7 +350,17 @@ fun VideoCompareFullscreenOverlay(
                     eventPlayUntilMs = null
                     videoPlayer.pause()
                     viewModel.pauseVideo()
-                    viewModel.loadBundleById(command.bundleId)
+                    viewModel.loadBundleById(command.bundleId, command.eventFileName)
+                }
+                is RemoteSyncCommand.SelectEventFile -> {
+                    eventPlayStartMs = null
+                    eventPlayUntilMs = null
+                    viewModel.selectEventFile(command.fileName, broadcast = false)
+                }
+                is RemoteSyncCommand.DeleteEventFile -> {
+                    eventPlayStartMs = null
+                    eventPlayUntilMs = null
+                    viewModel.deleteEventFile(command.fileName, broadcast = false)
                 }
                 RemoteSyncCommand.ClearMedia -> {
                     eventPlayStartMs = null
@@ -588,7 +611,15 @@ fun VideoCompareFullscreenOverlay(
                     durationMs = durationMs,
                     events = detectedEvents,
                     selectedEventIds = selectedEventIds,
+                    availableEventFiles = availableEventFiles,
+                    activeEventFileName = activeEventFileName,
+                    onSelectEventFile = { fileName ->
+                        eventPlayStartMs = null
+                        eventPlayUntilMs = null
+                        viewModel.selectEventFile(fileName, broadcast = true)
+                    },
                     onToggleEvent = ::toggleEvent,
+                    onJumpToEvent = ::jumpToEvent,
                     onToggleControls = {
                         controlsVisible = !controlsVisible
                         interactionRevision++
@@ -624,6 +655,19 @@ private fun algorithmColor(algorithm: CompareAlgorithm): Color = when (algorithm
     CompareAlgorithm.E -> Color(0xFFC9A0FF)
 }
 
+internal fun formatEventFileDisplayName(fileName: String): String {
+    return if (fileName.equals("events.json", ignoreCase = true)) {
+        "Original"
+    } else {
+        val label = fileName
+            .removePrefix("events_")
+            .removePrefix("EVENTS_")
+            .removeSuffix(".json")
+            .removeSuffix(".JSON")
+        "Custom: $label"
+    }
+}
+
 @Composable
 private fun DebugSidePanel(
     compareSlots: Map<CompareAlgorithm, CompareSlotState>,
@@ -631,7 +675,11 @@ private fun DebugSidePanel(
     durationMs: Long,
     events: List<DetectedEvent>,
     selectedEventIds: Set<String>,
+    availableEventFiles: List<String>,
+    activeEventFileName: String,
+    onSelectEventFile: (String) -> Unit,
     onToggleEvent: (DetectedEvent) -> Unit,
+    onJumpToEvent: (DetectedEvent) -> Unit,
     onToggleControls: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -658,7 +706,11 @@ private fun DebugSidePanel(
                     events = events,
                     compareSlots = compareSlots,
                     selectedEventIds = selectedEventIds,
+                    availableEventFiles = availableEventFiles,
+                    activeEventFileName = activeEventFileName,
+                    onSelectEventFile = onSelectEventFile,
                     onToggleEvent = onToggleEvent,
+                    onJumpToEvent = onJumpToEvent,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }
@@ -744,13 +796,18 @@ private fun EventListTab(
     events: List<DetectedEvent>,
     compareSlots: Map<CompareAlgorithm, CompareSlotState>,
     selectedEventIds: Set<String>,
+    availableEventFiles: List<String>,
+    activeEventFileName: String,
+    onSelectEventFile: (String) -> Unit,
     onToggleEvent: (DetectedEvent) -> Unit,
+    onJumpToEvent: (DetectedEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var eventMenuExpanded by remember { mutableStateOf(false) }
     val chosen = events.filter { it.id in selectedEventIds }
     val summary = when {
-        events.isEmpty() -> "No events in this folder"
-        chosen.isEmpty() -> "${events.size} events · tick the ones to play"
+        events.isEmpty() -> "No events in this list"
+        chosen.isEmpty() -> "${events.size} events · tap to jump, tick for span"
         else -> {
             val start = chosen.minOf { it.startMs }
             val end = chosen.maxOf { it.endMs }
@@ -758,11 +815,52 @@ private fun EventListTab(
         }
     }
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            text = summary,
-            color = Color.White.copy(alpha = 0.72f),
-            style = MaterialTheme.typography.labelSmall,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = summary,
+                color = Color.White.copy(alpha = 0.72f),
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(end = 6.dp),
+            )
+
+            if (availableEventFiles.isNotEmpty()) {
+                Box {
+                    Surface(
+                        modifier = Modifier.clickable { eventMenuExpanded = true },
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFF1E3246),
+                    ) {
+                        Text(
+                            text = "${formatEventFileDisplayName(activeEventFileName)} ▾",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            color = Color(0xFF90CAF9),
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = eventMenuExpanded,
+                        onDismissRequest = { eventMenuExpanded = false },
+                    ) {
+                        availableEventFiles.forEach { fileName ->
+                            DropdownMenuItem(
+                                text = { Text(formatEventFileDisplayName(fileName)) },
+                                onClick = {
+                                    eventMenuExpanded = false
+                                    onSelectEventFile(fileName)
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
         Column(
             modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -773,6 +871,7 @@ private fun EventListTab(
                     compareSlots = compareSlots,
                     selected = event.id in selectedEventIds,
                     onToggle = { onToggleEvent(event) },
+                    onJump = { onJumpToEvent(event) },
                 )
             }
         }
@@ -785,9 +884,12 @@ private fun EventRow(
     compareSlots: Map<CompareAlgorithm, CompareSlotState>,
     selected: Boolean,
     onToggle: () -> Unit,
+    onJump: () -> Unit,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onJump() },
         shape = RoundedCornerShape(6.dp),
         color = if (selected) Color(0xFF24506A) else Color(0xFF18222C),
     ) {

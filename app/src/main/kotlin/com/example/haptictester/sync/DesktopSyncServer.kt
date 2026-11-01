@@ -44,7 +44,9 @@ sealed interface RemoteSyncCommand {
     data class SelectAlgorithm(val algorithmId: String) : RemoteSyncCommand
     data class ToggleEvent(val eventId: String) : RemoteSyncCommand
     data class SetSelectedEvents(val eventIds: Set<String>) : RemoteSyncCommand
-    data class LoadBundle(val bundleId: String) : RemoteSyncCommand
+    data class LoadBundle(val bundleId: String, val eventFileName: String? = null) : RemoteSyncCommand
+    data class SelectEventFile(val fileName: String) : RemoteSyncCommand
+    data class DeleteEventFile(val fileName: String) : RemoteSyncCommand
     data class UpdateDesktopLibrary(val bundles: List<String>) : RemoteSyncCommand
     data object ClearMedia : RemoteSyncCommand
     data object RequestState : RemoteSyncCommand
@@ -591,8 +593,22 @@ class DesktopSyncServer(
             }
             "COMMAND_LOAD_BUNDLE" -> {
                 val bundleId = sanitizeSegment(obj.optString("bundleId").trim())
+                val rawEventFile = obj.optString("eventFile").trim()
+                val eventFile = if (rawEventFile.isNotEmpty()) sanitizeSegment(rawEventFile) else null
                 if (bundleId.isNotEmpty()) {
-                    onCommand(RemoteSyncCommand.LoadBundle(bundleId))
+                    onCommand(RemoteSyncCommand.LoadBundle(bundleId, eventFile))
+                }
+            }
+            "COMMAND_SELECT_EVENT_FILE" -> {
+                val fileName = sanitizeSegment(obj.optString("fileName").trim())
+                if (fileName.isNotEmpty()) {
+                    onCommand(RemoteSyncCommand.SelectEventFile(fileName))
+                }
+            }
+            "COMMAND_DELETE_EVENT_FILE" -> {
+                val fileName = sanitizeSegment(obj.optString("fileName").trim())
+                if (fileName.isNotEmpty()) {
+                    onCommand(RemoteSyncCommand.DeleteEventFile(fileName))
                 }
             }
             "COMMAND_CLEAR_MEDIA" -> {

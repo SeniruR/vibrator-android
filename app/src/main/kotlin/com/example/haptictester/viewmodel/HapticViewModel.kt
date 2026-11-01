@@ -188,6 +188,18 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     private val _selectedEventIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedEventIds = _selectedEventIds.asStateFlow()
 
+    private val _availableEventFiles = MutableStateFlow<List<String>>(emptyList())
+    val availableEventFiles = _availableEventFiles.asStateFlow()
+
+    private val _activeEventFileName = MutableStateFlow("events.json")
+    val activeEventFileName = _activeEventFileName.asStateFlow()
+
+    @Volatile
+    private var loadedBundleEventContents: Map<String, String> = emptyMap()
+
+    @Volatile
+    private var loadedFolderDocumentRoot: DocumentFile? = null
+
     private var loadedEventsRawJson: String? = null
 
     private val _syncRootFolderName = MutableStateFlow<String?>(null)
@@ -271,6 +283,10 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         stopVideo()
         loadedVideoUri = null
         loadedEventsRawJson = null
+        loadedBundleEventContents = emptyMap()
+        loadedFolderDocumentRoot = null
+        _availableEventFiles.value = emptyList()
+        _activeEventFileName.value = "events.json"
         _demoVideoUri.value = null
         _selectedVideoName.value = null
         _selectedHapticTrackName.value = null
@@ -438,6 +454,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
                     }
                 }
 
+                loadedFolderDocumentRoot = bundleDir
                 _activeBundleId.value = sanitized
                 _folderSummary.value = "$sanitized (Saved in Library)"
                 _transferStatus.value = "Saved '$sanitized' to Library."
@@ -575,12 +592,15 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
             val rootDoc = requireLibraryRootForTransfer()
             _transferStatus.value = "Syncing $bundleId / $fileName…"
 
-            val bundleDir = rootDoc.findFile(bundleId)?.takeIf { it.isDirectory }
-                ?: rootDoc.createDirectory(bundleId)
+            val bundleDir = rootDoc.listFiles().firstOrNull {
+                it.isDirectory && it.name.equals(bundleId, ignoreCase = true)
+            } ?: rootDoc.createDirectory(bundleId)
                 ?: throw IllegalStateException("Could not create bundle directory '$bundleId' in Library Folder")
 
             // Delete existing file with the same name so SAF does not append (1)
-            bundleDir.findFile(fileName)?.delete()
+            bundleDir.listFiles().firstOrNull {
+                it.isFile && it.name.equals(fileName, ignoreCase = true)
+            }?.delete()
             val mime = guessMimeType(fileName)
             val targetFile = bundleDir.createFile(mime, fileName)
                 ?: throw IllegalStateException("Could not create file '$fileName' in '$bundleId'")
@@ -588,13 +608,30 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
             app.contentResolver.openOutputStream(targetFile.uri, "w")?.use { output ->
                 copyStreamExact(input, output, contentLength, bundleId, fileName)
             } ?: throw IllegalStateException("Unable to open output stream for '$fileName'")
+
+            // If an event JSON was uploaded to the currently active bundle, refresh the available event files
+            if (fileName.lowercase().endsWith(".json") &&
+                _activeBundleId.value != null &&
+                _activeBundleId.value.equals(bundleId, ignoreCase = true)
+            ) {
+                val updatedMap = scanEventFilesInDocumentDir(app, bundleDir)
+                loadedBundleEventContents = updatedMap
+                _availableEventFiles.value = updatedMap.keys.toList()
+            }
+
+            viewModelScope.launch {
+                delay(2000)
+                if (_transferStatus.value?.startsWith("Syncing $bundleId / $fileName") == true) {
+                    _transferStatus.value = null
+                }
+            }
+            Unit
         }.onFailure { err ->
             if (_transferStatus.value?.startsWith("Haptic Studio wants to sync") != true) {
                 _transferStatus.value = "Sync failed: ${err.message ?: "Error"}"
             }
         }
     }
-
 
     private fun copyStreamExact(
         input: InputStream,
@@ -650,6 +687,91 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
                 if (_transferStatus.value == "Synced '$bundleId'" || _transferStatus.value?.startsWith("Sending ") == true) {
                     _transferStatus.value = null
                 }
+            }
+        }
+    }
+
+    fun selectEventFile(fileName: String, broadcast: Boolean = true) {
+        val trimmed = fileName.trim()
+        if (trimmed.isEmpty()) return
+        val app = getApplication<Application>()
+        viewModelScope.launch {
+            val resolvedPair = withContext(Dispatchers.IO) {
+                var currentMap = loadedBundleEventContents
+                var matchedKey = currentMap.keys.firstOrNull { it.equals(trimmed, ignoreCase = true) }
+
+                // If not cached in memory yet (e.g. just uploaded from PC), re-scan active bundle directory
+                if (matchedKey == null) {
+                    val activeFolder = loadedFolderDocumentRoot ?: run {
+                        val activeId = _activeBundleId.value
+                        if (activeId != null) {
+                            libraryRootOrNull()?.listFiles()?.firstOrNull {
+                                it.isDirectory && it.name.equals(activeId, ignoreCase = true)
+                            }
+                        } else {
+                            null
+                        }
+                    }
+                    if (activeFolder != null) {
+                        currentMap = scanEventFilesInDocumentDir(app, activeFolder)
+                        loadedBundleEventContents = currentMap
+                        _availableEventFiles.value = currentMap.keys.toList()
+                        matchedKey = currentMap.keys.firstOrNull { it.equals(trimmed, ignoreCase = true) }
+                    }
+                }
+
+                if (matchedKey != null) {
+                    val raw = currentMap[matchedKey].orEmpty()
+                    val parsed = runCatching { DetectedEvents.parse(raw) }.getOrDefault(emptyList())
+                    Triple(matchedKey, raw, parsed)
+                } else {
+                    null
+                }
+            }
+
+            if (resolvedPair != null) {
+                val (key, raw, parsed) = resolvedPair
+                _activeEventFileName.value = key
+                loadedEventsRawJson = raw
+                _detectedEvents.value = parsed
+                _selectedEventIds.value = emptySet()
+                if (broadcast) {
+                    broadcastSyncState(isHeartbeat = false)
+                }
+            }
+        }
+    }
+
+    fun deleteEventFile(fileName: String, broadcast: Boolean = true) {
+        val trimmed = fileName.trim()
+        if (!isCustomEventFileName(trimmed)) return
+        val app = getApplication<Application>()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                val activeFolder = loadedFolderDocumentRoot
+                if (activeFolder != null) {
+                    activeFolder.listFiles().firstOrNull {
+                        it.isFile && it.name.equals(trimmed, ignoreCase = true)
+                    }?.delete()
+                    val updatedMap = scanEventFilesInDocumentDir(app, activeFolder)
+                    loadedBundleEventContents = updatedMap
+                    _availableEventFiles.value = updatedMap.keys.toList()
+                } else {
+                    val nextMap = LinkedHashMap(loadedBundleEventContents)
+                    val keyToRemove = nextMap.keys.firstOrNull { it.equals(trimmed, ignoreCase = true) }
+                    if (keyToRemove != null) {
+                        nextMap.remove(keyToRemove)
+                        loadedBundleEventContents = nextMap
+                        _availableEventFiles.value = nextMap.keys.toList()
+                    }
+                }
+            }
+
+            if (_activeEventFileName.value.equals(trimmed, ignoreCase = true)) {
+                val fallback = _availableEventFiles.value.firstOrNull() ?: "events.json"
+                selectEventFile(fallback, broadcast = broadcast)
+            } else if (broadcast) {
+                broadcastSyncState(isHeartbeat = false)
             }
         }
     }
@@ -722,6 +844,9 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         val availableBundlesArray = JSONArray()
         _availableBundles.value.forEach { availableBundlesArray.put(it) }
 
+        val availableEventsArray = JSONArray()
+        _availableEventFiles.value.forEach { availableEventsArray.put(it) }
+
         val effectiveDuration = when {
             durationMs > 0L -> durationMs
             lastSyncDurationMs > 0L -> lastSyncDurationMs
@@ -743,6 +868,8 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         if (!isHeartbeat) {
             payload.put("activeBundleId", _activeBundleId.value ?: JSONObject.NULL)
             payload.put("availableBundles", availableBundlesArray)
+            payload.put("activeEventFile", _activeEventFileName.value)
+            payload.put("availableEventFiles", availableEventsArray)
         }
 
         syncServer.broadcastJson(payload)
@@ -857,6 +984,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
                 if (!video.exists()) return@launch
 
                 _activeBundleId.value = null
+                loadedFolderDocumentRoot = null
                 _compareSlots.value = defaultCompareSlots()
                 _activeCompareAlgorithm.value = null
 
@@ -882,10 +1010,13 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
                         app.assets.open("demo/events.json").bufferedReader().use { reader ->
                             val raw = reader.readText()
                             loadedEventsRawJson = raw
+                            loadedBundleEventContents = mapOf("events.json" to raw)
                             DetectedEvents.parse(raw)
                         }
                     }.getOrDefault(emptyList())
                 }
+                _availableEventFiles.value = listOf("events.json")
+                _activeEventFileName.value = "events.json"
                 _selectedEventIds.value = emptySet()
                 broadcastSyncState(isHeartbeat = false)
             } catch (throwable: Throwable) {
@@ -915,7 +1046,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun loadBundleById(bundleId: String) {
+    fun loadBundleById(bundleId: String, preferredEventFile: String? = null) {
         val trimmed = bundleId.trim()
         if (trimmed.isEmpty()) return
         viewModelScope.launch {
@@ -928,7 +1059,12 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
                         }
                     }
                     if (subDoc != null) {
-                        loadFolderDocument(subDoc, subDoc.name ?: trimmed, isLibraryBundle = true)
+                        loadFolderDocument(
+                            root = subDoc,
+                            bundleId = subDoc.name ?: trimmed,
+                            isLibraryBundle = true,
+                            preferredEventFile = preferredEventFile,
+                        )
                         return@launch
                     }
                 }
@@ -942,17 +1078,55 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private suspend fun loadFolderDocument(root: DocumentFile, bundleId: String, isLibraryBundle: Boolean) {
-        val app = getApplication<Application>()
-        val (children, rawEventsPair) = withContext(Dispatchers.IO) {
-            val files = root.listFiles().filter { it.isFile && !it.name.isNullOrBlank() }
-            val rawAndParsed = findEventsJson(root)?.let { file ->
-                app.contentResolver.openInputStream(file.uri)?.bufferedReader()?.use { reader ->
-                    val raw = reader.readText()
-                    raw to DetectedEvents.parse(raw)
-                }
+    private fun isCustomEventFileName(fileName: String): Boolean {
+        val lower = fileName.lowercase()
+        return lower.startsWith("events_") && lower.endsWith(".json") && lower.length > "events_.json".length
+    }
+
+    private fun scanEventFilesInDocumentDir(app: Application, root: DocumentFile): LinkedHashMap<String, String> {
+        val result = LinkedHashMap<String, String>()
+        val children = root.listFiles()
+
+        // 1. Original events.json (root or nested context_detector)
+        val rootEvents = children.firstOrNull { it.isFile && it.name.equals("events.json", ignoreCase = true) }
+            ?: findEventsJson(root)
+        if (rootEvents != null) {
+            runCatching {
+                app.contentResolver.openInputStream(rootEvents.uri)?.bufferedReader()?.use { it.readText() }
+            }.getOrNull()?.takeIf { it.isNotBlank() }?.let { raw ->
+                result["events.json"] = raw
             }
-            files to rawAndParsed
+        }
+
+        // 2. Custom events_*.json in bundle root
+        val customDocs = children.filter { child ->
+            val name = child.name
+            child.isFile && !name.isNullOrBlank() && isCustomEventFileName(name)
+        }.sortedBy { it.name!!.lowercase() }
+
+        for (doc in customDocs) {
+            val name = doc.name ?: continue
+            runCatching {
+                app.contentResolver.openInputStream(doc.uri)?.bufferedReader()?.use { it.readText() }
+            }.getOrNull()?.takeIf { it.isNotBlank() }?.let { raw ->
+                result[name] = raw
+            }
+        }
+
+        return result
+    }
+
+    private suspend fun loadFolderDocument(
+        root: DocumentFile,
+        bundleId: String,
+        isLibraryBundle: Boolean,
+        preferredEventFile: String? = null,
+    ) {
+        val app = getApplication<Application>()
+        val (children, eventFilesMap) = withContext(Dispatchers.IO) {
+            val files = root.listFiles().filter { it.isFile && !it.name.isNullOrBlank() }
+            val evMap = scanEventFilesInDocumentDir(app, root)
+            files to evMap
         }
         val byName = children.associateBy { it.name!! }
         val match = HapticFolderMatcher.match(byName.keys.toList())
@@ -962,6 +1136,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
 
+        loadedFolderDocumentRoot = root
         _activeBundleId.value = if (isLibraryBundle) bundleId else null
         _folderSummary.value = "$bundleId (${match.summary()})"
         _videoError.value = null
@@ -977,24 +1152,42 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
             val uri = byName[name]?.uri ?: continue
             loadCompareSlot(algorithm, uri)
         }
-        loadedEventsRawJson = rawEventsPair?.first
-        _detectedEvents.value = rawEventsPair?.second.orEmpty()
+
+        loadedBundleEventContents = eventFilesMap
+        _availableEventFiles.value = eventFilesMap.keys.toList()
+        val chosenEventFile = preferredEventFile?.let { pref ->
+            eventFilesMap.keys.firstOrNull { it.equals(pref, ignoreCase = true) }
+        } ?: eventFilesMap.keys.firstOrNull() ?: "events.json"
+
+        _activeEventFileName.value = chosenEventFile
+        val chosenRaw = eventFilesMap[chosenEventFile]
+        loadedEventsRawJson = chosenRaw
+        _detectedEvents.value = chosenRaw?.let {
+            runCatching { DetectedEvents.parse(it) }.getOrDefault(emptyList())
+        }.orEmpty()
         _selectedEventIds.value = emptySet()
         broadcastSyncState(isHeartbeat = false)
     }
 
     private suspend fun loadLocalFileBundle(dir: File, bundleId: String, isLibraryBundle: Boolean) {
-        val (files, rawEventsPair) = withContext(Dispatchers.IO) {
+        val (files, eventFilesMap) = withContext(Dispatchers.IO) {
             val childFiles = dir.listFiles()?.filter { it.isFile } ?: emptyList()
-            val eventsFile = File(dir, "debug/context_detector/events.json").takeIf { it.exists() }
+            val evMap = LinkedHashMap<String, String>()
+            val origFile = File(dir, "debug/context_detector/events.json").takeIf { it.exists() }
                 ?: File(dir, "events.json").takeIf { it.exists() }
-            val rawAndParsed = eventsFile?.let { f ->
-                runCatching {
-                    val raw = f.readText()
-                    raw to DetectedEvents.parse(raw)
-                }.getOrNull()
+            if (origFile != null) {
+                runCatching { origFile.readText() }.getOrNull()?.takeIf { it.isNotBlank() }?.let {
+                    evMap["events.json"] = it
+                }
             }
-            childFiles to rawAndParsed
+            childFiles.filter { isCustomEventFileName(it.name) }
+                .sortedBy { it.name.lowercase() }
+                .forEach { f ->
+                    runCatching { f.readText() }.getOrNull()?.takeIf { it.isNotBlank() }?.let {
+                        evMap[f.name] = it
+                    }
+                }
+            childFiles to evMap
         }
         val byName = files.associateBy { it.name }
         val match = HapticFolderMatcher.match(byName.keys.toList())
@@ -1004,6 +1197,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
 
+        loadedFolderDocumentRoot = null
         _activeBundleId.value = if (isLibraryBundle) bundleId else null
         _folderSummary.value = "$bundleId (${match.summary()})"
         _videoError.value = null
@@ -1020,8 +1214,16 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
             val file = byName[name] ?: continue
             loadCompareSlot(algorithm, Uri.fromFile(file))
         }
-        loadedEventsRawJson = rawEventsPair?.first
-        _detectedEvents.value = rawEventsPair?.second.orEmpty()
+
+        loadedBundleEventContents = eventFilesMap
+        _availableEventFiles.value = eventFilesMap.keys.toList()
+        val chosenEventFile = eventFilesMap.keys.firstOrNull() ?: "events.json"
+        _activeEventFileName.value = chosenEventFile
+        val chosenRaw = eventFilesMap[chosenEventFile]
+        loadedEventsRawJson = chosenRaw
+        _detectedEvents.value = chosenRaw?.let {
+            runCatching { DetectedEvents.parse(it) }.getOrDefault(emptyList())
+        }.orEmpty()
         _selectedEventIds.value = emptySet()
         broadcastSyncState(isHeartbeat = false)
     }
