@@ -188,6 +188,12 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
     private val _selectedEventIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedEventIds = _selectedEventIds.asStateFlow()
 
+    private val _eventHeadroomMs = MutableStateFlow(500L)
+    val eventHeadroomMs = _eventHeadroomMs.asStateFlow()
+
+    private val _eventTailroomMs = MutableStateFlow(0L)
+    val eventTailroomMs = _eventTailroomMs.asStateFlow()
+
     private val _availableEventFiles = MutableStateFlow<List<String>>(emptyList())
     val availableEventFiles = _availableEventFiles.asStateFlow()
 
@@ -795,6 +801,45 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         return next
     }
 
+    fun setEventHeadroomMs(ms: Long, broadcast: Boolean = true) {
+        val clamped = ms.coerceIn(0L, 5000L)
+        if (_eventHeadroomMs.value == clamped) return
+        _eventHeadroomMs.value = clamped
+        if (broadcast) {
+            broadcastSyncState(isHeartbeat = false)
+        }
+    }
+
+    fun setEventTailroomMs(ms: Long, broadcast: Boolean = true) {
+        val clamped = ms.coerceIn(0L, 5000L)
+        if (_eventTailroomMs.value == clamped) return
+        _eventTailroomMs.value = clamped
+        if (broadcast) {
+            broadcastSyncState(isHeartbeat = false)
+        }
+    }
+
+    fun computeSelectedSpanMs(
+        ids: Set<String> = _selectedEventIds.value,
+        durationMs: Long = lastSyncDurationMs,
+    ): Pair<Long, Long>? {
+        if (ids.isEmpty()) return null
+        val chosen = _detectedEvents.value.filter { it.id in ids }
+        if (chosen.isEmpty()) return null
+        val rawStart = chosen.minOf { it.startMs }
+        val rawEnd = chosen.maxOf { it.endMs }
+        val start = (rawStart - _eventHeadroomMs.value).coerceAtLeast(0L)
+        val rawEndWithTail = (rawEnd + _eventTailroomMs.value).coerceAtLeast(start + 50L)
+        val effectiveDuration = when {
+            durationMs > 0L -> durationMs
+            lastSyncDurationMs > 0L -> lastSyncDurationMs
+            _hapticTrackDurationMs.value > 0L -> _hapticTrackDurationMs.value
+            else -> 0L
+        }
+        val end = if (effectiveDuration > 0L) rawEndWithTail.coerceAtMost(effectiveDuration).coerceAtLeast(start) else rawEndWithTail
+        return start to end
+    }
+
     fun notifyPlayerStateChanged(
         positionMs: Long = lastSyncPositionMs,
         durationMs: Long = lastSyncDurationMs,
@@ -814,6 +859,11 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 is RemoteSyncCommand.UpdateDesktopLibrary -> {
                     setDesktopLibraryBundles(command.bundles)
+                }
+                is RemoteSyncCommand.UpdatePlaybackSettings -> {
+                    command.headroomMs?.let { setEventHeadroomMs(it, broadcast = false) }
+                    command.tailroomMs?.let { setEventTailroomMs(it, broadcast = false) }
+                    _remoteSyncCommands.tryEmit(command)
                 }
                 else -> {
                     _remoteSyncCommands.tryEmit(command)
@@ -863,6 +913,8 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
             .put("activeAlgorithm", _activeCompareAlgorithm.value?.id ?: JSONObject.NULL)
             .put("readyAlgorithms", readyAlgos)
             .put("selectedEventIds", selectedEventsArray)
+            .put("headroomMs", _eventHeadroomMs.value)
+            .put("tailroomMs", _eventTailroomMs.value)
             .put("videoName", _selectedVideoName.value ?: JSONObject.NULL)
 
         if (!isHeartbeat) {

@@ -43,7 +43,8 @@ sealed interface RemoteSyncCommand {
     data class SetSpeed(val speed: Float) : RemoteSyncCommand
     data class SelectAlgorithm(val algorithmId: String) : RemoteSyncCommand
     data class ToggleEvent(val eventId: String) : RemoteSyncCommand
-    data class SetSelectedEvents(val eventIds: Set<String>) : RemoteSyncCommand
+    data class SetSelectedEvents(val eventIds: Set<String>, val timeMs: Long? = null) : RemoteSyncCommand
+    data class UpdatePlaybackSettings(val headroomMs: Long? = null, val tailroomMs: Long? = null) : RemoteSyncCommand
     data class LoadBundle(val bundleId: String, val eventFileName: String? = null) : RemoteSyncCommand
     data class SelectEventFile(val fileName: String) : RemoteSyncCommand
     data class DeleteEventFile(val fileName: String) : RemoteSyncCommand
@@ -589,7 +590,25 @@ class DesktopSyncServer(
                         if (id.isNotEmpty()) ids += id
                     }
                 }
-                onCommand(RemoteSyncCommand.SetSelectedEvents(ids))
+                val timeMs = if (obj.has("timeMs") && !obj.isNull("timeMs")) {
+                    obj.optLong("timeMs", 0L).coerceAtLeast(0L)
+                } else {
+                    null
+                }
+                onCommand(RemoteSyncCommand.SetSelectedEvents(ids, timeMs))
+            }
+            "COMMAND_SET_PLAYBACK_SETTINGS" -> {
+                val headroomMs = if (obj.has("headroomMs") && !obj.isNull("headroomMs")) {
+                    obj.optLong("headroomMs", 500L).coerceIn(0L, 5000L)
+                } else {
+                    null
+                }
+                val tailroomMs = if (obj.has("tailroomMs") && !obj.isNull("tailroomMs")) {
+                    obj.optLong("tailroomMs", 0L).coerceIn(0L, 5000L)
+                } else {
+                    null
+                }
+                onCommand(RemoteSyncCommand.UpdatePlaybackSettings(headroomMs, tailroomMs))
             }
             "COMMAND_LOAD_BUNDLE" -> {
                 val bundleId = sanitizeSegment(obj.optString("bundleId").trim())

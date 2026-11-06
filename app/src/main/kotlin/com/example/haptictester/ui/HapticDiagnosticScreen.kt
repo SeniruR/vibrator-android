@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -40,6 +41,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -122,6 +124,8 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val folderSummary by viewModel.folderSummary.collectAsState()
     val detectedEvents by viewModel.detectedEvents.collectAsState()
     val selectedEventIds by viewModel.selectedEventIds.collectAsState()
+    val eventHeadroomMs by viewModel.eventHeadroomMs.collectAsState()
+    val eventTailroomMs by viewModel.eventTailroomMs.collectAsState()
     val availableEventFiles by viewModel.availableEventFiles.collectAsState()
     val activeEventFileName by viewModel.activeEventFileName.collectAsState()
     val syncStatus by viewModel.syncStatus.collectAsState()
@@ -228,11 +232,25 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                 reason: Int,
             ) {
                 if (!isVideoFullscreen && reason == Player.DISCONTINUITY_REASON_SEEK) {
-                    viewModel.notifyPlayerStateChanged(
-                        positionMs = newPosition.positionMs.coerceAtLeast(0L),
-                        durationMs = videoDurationMs,
-                        speed = videoPlayer.playbackParameters.speed,
-                    )
+                    val rawPos = newPosition.positionMs.coerceAtLeast(0L)
+                    val span = viewModel.computeSelectedSpanMs(viewModel.selectedEventIds.value, videoDurationMs)
+                    if (span != null && (rawPos < (span.first - 15L).coerceAtLeast(0L) || rawPos > span.second + 15L)) {
+                        eventPlayStartMs = span.first
+                        eventPlayUntilMs = span.second
+                        videoPlayer.seekTo(span.first)
+                        viewModel.onVideoPlaybackPosition(span.first.toInt(), videoDurationMs)
+                        viewModel.notifyPlayerStateChanged(
+                            positionMs = span.first,
+                            durationMs = videoDurationMs,
+                            speed = videoPlayer.playbackParameters.speed,
+                        )
+                    } else {
+                        viewModel.notifyPlayerStateChanged(
+                            positionMs = rawPos,
+                            durationMs = videoDurationMs,
+                            speed = videoPlayer.playbackParameters.speed,
+                        )
+                    }
                 }
             }
 
@@ -252,26 +270,69 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
         onDispose { videoPlayer.removeListener(listener) }
     }
 
+    fun applyDiagnosticEventSelectionChange(nextIds: Set<String>, remoteTimeMs: Long? = null) {
+        videoPlayer.pause()
+        viewModel.pauseVideo()
+        if (nextIds.isEmpty()) {
+            eventPlayStartMs = null
+            eventPlayUntilMs = null
+            val pos = videoPlayer.currentPosition.coerceAtLeast(0L)
+            viewModel.notifyPlayerStateChanged(
+                positionMs = pos,
+                durationMs = videoDurationMs,
+                speed = videoPlayer.playbackParameters.speed,
+            )
+            return
+        }
+        val span = viewModel.computeSelectedSpanMs(nextIds, videoDurationMs)
+        if (span == null) {
+            eventPlayStartMs = null
+            eventPlayUntilMs = null
+            return
+        }
+        val (spanStartMs, spanEndMs) = span
+        eventPlayStartMs = spanStartMs
+        eventPlayUntilMs = spanEndMs
+        val currentPos = videoPlayer.currentPosition.coerceAtLeast(0L)
+        val targetPos = when {
+            remoteTimeMs != null && remoteTimeMs in spanStartMs..spanEndMs -> remoteTimeMs
+            currentPos < (spanStartMs - 15L).coerceAtLeast(0L) || currentPos > spanEndMs + 15L -> spanStartMs
+            else -> currentPos
+        }
+        if (kotlin.math.abs(currentPos - targetPos) > 15L) {
+            videoPlayer.seekTo(targetPos)
+            viewModel.onVideoPlaybackPosition(targetPos.toInt(), videoDurationMs)
+        }
+        viewModel.notifyPlayerStateChanged(
+            positionMs = targetPos,
+            durationMs = videoDurationMs,
+            speed = videoPlayer.playbackParameters.speed,
+        )
+    }
+
     // Handle remote commands from Desktop when not in fullscreen overlay
     LaunchedEffect(viewModel, videoPlayer, isVideoFullscreen) {
         if (isVideoFullscreen) return@LaunchedEffect
         viewModel.remoteSyncCommands.collect { command ->
-            val chosen = detectedEvents.filter { it.id in viewModel.selectedEventIds.value }
-            val span = if (chosen.isNotEmpty()) {
-                val start = chosen.minOf { it.startMs }.coerceAtLeast(0L)
-                val end = chosen.maxOf { it.endMs }.coerceAtLeast(start + 200L)
-                start to end
-            } else {
-                null
-            }
+            val span = viewModel.computeSelectedSpanMs(viewModel.selectedEventIds.value, videoDurationMs)
 
             when (command) {
                 is RemoteSyncCommand.Play -> {
-                    if (span != null && command.timeMs == null) {
+                    if (span != null) {
                         eventPlayStartMs = span.first
                         eventPlayUntilMs = span.second
-                        val seekTo = (span.first - 500L).coerceAtLeast(0L)
-                        videoPlayer.seekTo(seekTo)
+                        val candidate = command.timeMs ?: videoPlayer.currentPosition.coerceAtLeast(0L)
+                        val seekTo = if (
+                            candidate < (span.first - 15L).coerceAtLeast(0L) ||
+                            candidate >= (span.second - 25L).coerceAtLeast(span.first)
+                        ) {
+                            span.first
+                        } else {
+                            candidate
+                        }
+                        if (kotlin.math.abs(videoPlayer.currentPosition - seekTo) > 40L) {
+                            videoPlayer.seekTo(seekTo)
+                        }
                         viewModel.playVideo()
                         videoPlayer.playWhenReady = true
                         videoPlayer.play()
@@ -299,7 +360,19 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                     )
                 }
                 is RemoteSyncCommand.Seek -> {
-                    val target = command.timeMs.coerceAtLeast(0L)
+                    val rawTarget = command.timeMs.coerceAtLeast(0L)
+                    val target = if (
+                        span != null &&
+                        (rawTarget < (span.first - 15L).coerceAtLeast(0L) || rawTarget > span.second + 15L)
+                    ) {
+                        span.first
+                    } else {
+                        rawTarget
+                    }
+                    if (span != null) {
+                        eventPlayStartMs = span.first
+                        eventPlayUntilMs = span.second
+                    }
                     videoPlayer.seekTo(target)
                     viewModel.onVideoPlaybackPosition(target.toInt(), videoDurationMs)
                     viewModel.notifyPlayerStateChanged(
@@ -323,8 +396,7 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                             eventPlayStartMs = span.first
                             eventPlayUntilMs = span.second
                             viewModel.switchCompareSlot(algo, span.first, syncNow = false)
-                            val seekTo = (span.first - 500L).coerceAtLeast(0L)
-                            videoPlayer.seekTo(seekTo)
+                            videoPlayer.seekTo(span.first)
                             viewModel.playVideo()
                             videoPlayer.playWhenReady = true
                             videoPlayer.play()
@@ -335,33 +407,15 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                 }
                 is RemoteSyncCommand.ToggleEvent -> {
                     val next = viewModel.toggleSelectedEvent(command.eventId, broadcast = true)
-                    eventPlayStartMs = null
-                    eventPlayUntilMs = null
-                    if (next.isEmpty()) {
-                        videoPlayer.seekTo(0L)
-                        viewModel.playVideo()
-                        videoPlayer.playWhenReady = true
-                        videoPlayer.play()
-                    } else if (!videoPlayer.isPlaying) {
-                        val start = detectedEvents.filter { it.id in next }.minOfOrNull { it.startMs }?.coerceAtLeast(0L) ?: 0L
-                        videoPlayer.seekTo(start)
-                        viewModel.notifyPlayerStateChanged(positionMs = start, durationMs = videoDurationMs)
-                    }
+                    applyDiagnosticEventSelectionChange(next)
                 }
                 is RemoteSyncCommand.SetSelectedEvents -> {
                     viewModel.setSelectedEventIds(command.eventIds, broadcast = true)
-                    val next = viewModel.selectedEventIds.value
-                    eventPlayStartMs = null
-                    eventPlayUntilMs = null
-                    if (next.isEmpty()) {
-                        videoPlayer.seekTo(0L)
-                        viewModel.playVideo()
-                        videoPlayer.playWhenReady = true
-                        videoPlayer.play()
-                    } else if (!videoPlayer.isPlaying) {
-                        val start = detectedEvents.filter { it.id in next }.minOfOrNull { it.startMs }?.coerceAtLeast(0L) ?: 0L
-                        videoPlayer.seekTo(start)
-                        viewModel.notifyPlayerStateChanged(positionMs = start, durationMs = videoDurationMs)
+                    applyDiagnosticEventSelectionChange(viewModel.selectedEventIds.value, command.timeMs)
+                }
+                is RemoteSyncCommand.UpdatePlaybackSettings -> {
+                    if (viewModel.selectedEventIds.value.isNotEmpty()) {
+                        applyDiagnosticEventSelectionChange(viewModel.selectedEventIds.value)
                     }
                 }
                 is RemoteSyncCommand.LoadBundle -> {
@@ -405,20 +459,34 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
         }
     }
 
-    LaunchedEffect(videoPlaying, loadedVideoUri, selectedHapticTrackName, isVideoFullscreen, eventPlayStartMs, eventPlayUntilMs) {
+    LaunchedEffect(
+        videoPlaying,
+        loadedVideoUri,
+        selectedHapticTrackName,
+        isVideoFullscreen,
+        eventPlayStartMs,
+        eventPlayUntilMs,
+        selectedEventIds,
+        eventHeadroomMs,
+        eventTailroomMs,
+    ) {
         if (!videoPlaying || isVideoFullscreen) return@LaunchedEffect
         var armed = false
         while (isActive && videoPlaying) {
             val pos = videoPlayer.currentPosition.coerceAtLeast(0L)
-            val until = eventPlayUntilMs
-            val start = eventPlayStartMs
+            val activeSpan = viewModel.computeSelectedSpanMs(selectedEventIds, videoDurationMs)
+            val until = activeSpan?.second ?: eventPlayUntilMs
+            val start = activeSpan?.first ?: eventPlayStartMs
             if (until != null && start != null) {
                 if (!armed && pos + 250L >= start) armed = true
                 if (armed && pos >= until) {
-                    eventPlayStartMs = null
-                    eventPlayUntilMs = null
+                    if (activeSpan == null) {
+                        eventPlayStartMs = null
+                        eventPlayUntilMs = null
+                    }
                     videoPlayer.pause()
                     viewModel.pauseVideo()
+                    videoPlayer.seekTo(until)
                     viewModel.notifyPlayerStateChanged(positionMs = until, durationMs = videoDurationMs)
                     return@LaunchedEffect
                 }
@@ -504,6 +572,20 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                     amplitude = amplitude,
                     hasAmplitude = hasAmplitude,
                     onAmplitudeChange = viewModel::setAmplitude,
+                    headroomMs = eventHeadroomMs,
+                    tailroomMs = eventTailroomMs,
+                    onHeadroomChange = { ms ->
+                        viewModel.setEventHeadroomMs(ms, broadcast = true)
+                        if (!isVideoFullscreen && selectedEventIds.isNotEmpty()) {
+                            applyDiagnosticEventSelectionChange(selectedEventIds)
+                        }
+                    },
+                    onTailroomChange = { ms ->
+                        viewModel.setEventTailroomMs(ms, broadcast = true)
+                        if (!isVideoFullscreen && selectedEventIds.isNotEmpty()) {
+                            applyDiagnosticEventSelectionChange(selectedEventIds)
+                        }
+                    },
                 )
 
                 when (AppTab.entries[selectedTab]) {
@@ -536,7 +618,18 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                             openCompareLauncher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/*"))
                         },
                         onSwitchCompareSlot = { algorithm ->
-                            viewModel.switchCompareSlot(algorithm, videoPlayer.currentPosition)
+                            val span = viewModel.computeSelectedSpanMs(selectedEventIds, videoDurationMs)
+                            if (span != null) {
+                                eventPlayStartMs = span.first
+                                eventPlayUntilMs = span.second
+                                viewModel.switchCompareSlot(algorithm, span.first, syncNow = false)
+                                videoPlayer.seekTo(span.first)
+                                viewModel.playVideo()
+                                videoPlayer.playWhenReady = true
+                                videoPlayer.play()
+                            } else {
+                                viewModel.switchCompareSlot(algorithm, videoPlayer.currentPosition)
+                            }
                         },
                         onSelectEventFile = { fileName ->
                             eventPlayStartMs = null
@@ -544,6 +637,18 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                             viewModel.selectEventFile(fileName, broadcast = true)
                         },
                         onPlayVideo = {
+                            val span = viewModel.computeSelectedSpanMs(selectedEventIds, videoDurationMs)
+                            if (span != null) {
+                                eventPlayStartMs = span.first
+                                eventPlayUntilMs = span.second
+                                val cur = videoPlayer.currentPosition.coerceAtLeast(0L)
+                                if (
+                                    cur < (span.first - 15L).coerceAtLeast(0L) ||
+                                    cur >= (span.second - 25L).coerceAtLeast(span.first)
+                                ) {
+                                    videoPlayer.seekTo(span.first)
+                                }
+                            }
                             viewModel.playVideo()
                             videoPlayer.playWhenReady = true
                             videoPlayer.play()
@@ -554,7 +659,9 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                         },
                         onStopVideo = {
                             videoPlayer.pause()
-                            videoPlayer.seekTo(0)
+                            val span = viewModel.computeSelectedSpanMs(selectedEventIds, videoDurationMs)
+                            val resetPos = span?.first ?: 0L
+                            videoPlayer.seekTo(resetPos)
                             viewModel.stopVideo()
                         },
                         onFullscreen = {
@@ -835,6 +942,10 @@ private fun IntensityCapCard(
     amplitude: Int,
     hasAmplitude: Boolean,
     onAmplitudeChange: (Int) -> Unit,
+    headroomMs: Long,
+    tailroomMs: Long,
+    onHeadroomChange: (Long) -> Unit,
+    onTailroomChange: (Long) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -858,6 +969,93 @@ private fun IntensityCapCard(
                 } else {
                     "No hardware amplitude control — slider still caps software intensity."
                 },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)),
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Event Headroom & Tailroom",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                TextButton(
+                    onClick = {
+                        onHeadroomChange(500L)
+                        onTailroomChange(0L)
+                    },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                ) {
+                    Text("Reset", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Headroom (Before Event)",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = "%.2fs (%d ms)".format(headroomMs / 1000f, headroomMs),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Slider(
+                value = headroomMs.toFloat(),
+                onValueChange = { raw ->
+                    val stepped = ((raw / 50f).toInt() * 50L).coerceIn(0L, 5000L)
+                    onHeadroomChange(stepped)
+                },
+                valueRange = 0f..5000f,
+                steps = 99,
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Tailroom (After Event)",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = "%.2fs (%d ms)".format(tailroomMs / 1000f, tailroomMs),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Slider(
+                value = tailroomMs.toFloat(),
+                onValueChange = { raw ->
+                    val stepped = ((raw / 50f).toInt() * 50L).coerceIn(0L, 5000L)
+                    onTailroomChange(stepped)
+                },
+                valueRange = 0f..5000f,
+                steps = 99,
+            )
+            Text(
+                text = "Starts playback before event start and stops after event end when events are selected.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
             )
