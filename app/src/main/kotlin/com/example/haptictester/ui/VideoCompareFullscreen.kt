@@ -2,6 +2,7 @@ package com.example.haptictester.ui
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
+import android.os.SystemClock
 import android.view.View
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
@@ -114,10 +115,11 @@ fun VideoCompareFullscreenOverlay(
 
     var positionMs by remember(videoPlayer) { mutableStateOf(videoPlayer.currentPosition.coerceAtLeast(0L)) }
     var isScrubbing by remember(videoPlayer) { mutableStateOf(false) }
-    var pendingSeekTargetMs by remember(videoPlayer) { mutableStateOf<Long?>(null) }
+    var suppressRemoteSyncEchoUntilMs by remember(videoPlayer) { mutableStateOf(0L) }
     var selectedSpeed by remember(videoPlayer) { mutableStateOf(videoPlayer.playbackParameters.speed) }
     var speedMenuExpanded by remember { mutableStateOf(false) }
     var debugVisible by remember { mutableStateOf(false) }
+    val isRatingSessionActive by viewModel.isRatingSessionActive.collectAsState()
     val selectedEventIds by viewModel.selectedEventIds.collectAsState()
     val eventHeadroomMs by viewModel.eventHeadroomMs.collectAsState()
     val eventTailroomMs by viewModel.eventTailroomMs.collectAsState()
@@ -125,6 +127,7 @@ fun VideoCompareFullscreenOverlay(
     val activeEventFileName by viewModel.activeEventFileName.collectAsState()
     var eventPlayStartMs by remember { mutableStateOf<Long?>(null) }
     var eventPlayUntilMs by remember { mutableStateOf<Long?>(null) }
+    var hasReachedEventEnd by remember { mutableStateOf(false) }
     var eventPlayToken by remember { mutableIntStateOf(0) }
     var controlsVisible by remember { mutableStateOf(true) }
     var interactionRevision by remember { mutableIntStateOf(0) }
@@ -156,22 +159,19 @@ fun VideoCompareFullscreenOverlay(
             ) {
                 positionMs = newPosition.positionMs.coerceAtLeast(0L)
                 if (reason == Player.DISCONTINUITY_REASON_SEEK) {
-                    pendingSeekTargetMs = null
-                    viewModel.notifyPlayerStateChanged(
-                        positionMs = positionMs,
-                        durationMs = durationMs,
-                        speed = selectedSpeed,
-                    )
+                    viewModel.updateSyncPositionOnly(positionMs, durationMs)
                 }
             }
 
             override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
                 selectedSpeed = playbackParameters.speed
-                viewModel.notifyPlayerStateChanged(
-                    positionMs = videoPlayer.currentPosition.coerceAtLeast(0L),
-                    durationMs = durationMs,
-                    speed = selectedSpeed,
-                )
+                if (SystemClock.elapsedRealtime() > suppressRemoteSyncEchoUntilMs) {
+                    viewModel.notifyPlayerStateChanged(
+                        positionMs = videoPlayer.currentPosition.coerceAtLeast(0L),
+                        durationMs = durationMs,
+                        speed = selectedSpeed,
+                    )
+                }
             }
 
             override fun onEvents(player: Player, events: Player.Events) {
@@ -182,25 +182,16 @@ fun VideoCompareFullscreenOverlay(
         onDispose { videoPlayer.removeListener(listener) }
     }
 
-    LaunchedEffect(pendingSeekTargetMs) {
-        val targetMs = pendingSeekTargetMs ?: return@LaunchedEffect
-        repeat(40) {
-            val actualMs = videoPlayer.currentPosition.coerceAtLeast(0L)
-            if (kotlin.math.abs(actualMs - targetMs) <= 100L) {
-                positionMs = actualMs
-                pendingSeekTargetMs = null
-                return@LaunchedEffect
-            }
-            delay(25L)
-        }
-        positionMs = videoPlayer.currentPosition.coerceAtLeast(0L)
-        pendingSeekTargetMs = null
-    }
-
     LaunchedEffect(videoPlaying, controlsVisible, interactionRevision) {
         if (!videoPlaying || !controlsVisible) return@LaunchedEffect
         delay(3_000L)
         controlsVisible = false
+    }
+
+    LaunchedEffect(isRatingSessionActive) {
+        if (isRatingSessionActive) {
+            debugVisible = false
+        }
     }
 
     fun selectedSpan(ids: Set<String> = selectedEventIds): Pair<Long, Long>? {
@@ -212,48 +203,54 @@ fun VideoCompareFullscreenOverlay(
         endMs: Long,
         algorithm: CompareAlgorithm?,
         restartFromStart: Boolean = true,
+        broadcast: Boolean = true,
     ) {
         val start = startMs.coerceAtLeast(0L)
         val end = endMs.coerceAtLeast(start + 50L)
         eventPlayStartMs = start
         eventPlayUntilMs = end
         eventPlayToken++
-        videoPlayer.pause()
-        viewModel.pauseVideo()
         val currentPos = videoPlayer.currentPosition.coerceAtLeast(0L)
-        val seekTo = if (
-            restartFromStart ||
-            currentPos < (start - 15L).coerceAtLeast(0L) ||
-            currentPos >= (end - 25L).coerceAtLeast(start)
-        ) {
-            start
-        } else {
-            currentPos
-        }
+        val shouldRestart = restartFromStart ||
+            hasReachedEventEnd ||
+            currentPos < (start - 80L).coerceAtLeast(0L) ||
+            currentPos >= (end - 100L).coerceAtLeast(start)
+        val seekTo = if (shouldRestart) start else currentPos
+        hasReachedEventEnd = false
         if (algorithm != null) {
-            viewModel.switchCompareSlot(algorithm, seekTo, syncNow = false)
+            viewModel.switchCompareSlot(algorithm, seekTo, syncNow = false, broadcast = false)
         }
-        if (kotlin.math.abs(currentPos - seekTo) > 25L) {
-            pendingSeekTargetMs = seekTo
+        if (kotlin.math.abs(currentPos - seekTo) > 80L) {
             positionMs = seekTo
             videoPlayer.seekTo(seekTo)
         }
-        viewModel.playVideo()
+        viewModel.playVideo(positionMs = seekTo, broadcast = false)
         videoPlayer.playWhenReady = true
         videoPlayer.play()
-        viewModel.notifyPlayerStateChanged(positionMs = seekTo, durationMs = durationMs, speed = selectedSpeed)
+        if (broadcast) {
+            viewModel.notifyPlayerStateChanged(positionMs = seekTo, durationMs = durationMs, speed = selectedSpeed)
+        }
     }
 
-    fun applyEventSelectionAfterChange(nextIds: Set<String>, remoteTimeMs: Long? = null) {
+    fun applyEventSelectionAfterChange(
+        nextIds: Set<String>,
+        remoteTimeMs: Long? = null,
+        broadcast: Boolean = true,
+    ) {
         eventPlayToken++
+        hasReachedEventEnd = false
+        videoPlayer.playWhenReady = false
         videoPlayer.pause()
-        viewModel.pauseVideo()
+        viewModel.pauseVideo(broadcast = false)
         if (nextIds.isEmpty()) {
             eventPlayStartMs = null
             eventPlayUntilMs = null
             val currentPos = videoPlayer.currentPosition.coerceAtLeast(0L)
             positionMs = currentPos
-            viewModel.notifyPlayerStateChanged(positionMs = currentPos, durationMs = durationMs, speed = selectedSpeed)
+            viewModel.updateSyncPositionOnly(currentPos, durationMs)
+            if (broadcast) {
+                viewModel.notifyPlayerStateChanged(positionMs = currentPos, durationMs = durationMs, speed = selectedSpeed)
+            }
             return
         }
         val span = selectedSpan(nextIds)
@@ -266,18 +263,19 @@ fun VideoCompareFullscreenOverlay(
         eventPlayStartMs = spanStartMs
         eventPlayUntilMs = spanEndMs
         val currentPos = videoPlayer.currentPosition.coerceAtLeast(0L)
-        val targetPos = when {
-            remoteTimeMs != null && remoteTimeMs in spanStartMs..spanEndMs -> remoteTimeMs
-            currentPos < (spanStartMs - 15L).coerceAtLeast(0L) || currentPos > spanEndMs + 15L -> spanStartMs
-            else -> currentPos
+        val targetPos = if (remoteTimeMs != null && remoteTimeMs in spanStartMs..spanEndMs) {
+            remoteTimeMs
+        } else {
+            spanStartMs
         }
         positionMs = targetPos
-        if (kotlin.math.abs(currentPos - targetPos) > 15L) {
-            pendingSeekTargetMs = targetPos
+        if (kotlin.math.abs(currentPos - targetPos) > 40L) {
             videoPlayer.seekTo(targetPos)
-            viewModel.onVideoPlaybackPosition(targetPos.toInt(), durationMs)
         }
-        viewModel.notifyPlayerStateChanged(positionMs = targetPos, durationMs = durationMs, speed = selectedSpeed)
+        viewModel.updateSyncPositionOnly(targetPos, durationMs)
+        if (broadcast) {
+            viewModel.notifyPlayerStateChanged(positionMs = targetPos, durationMs = durationMs, speed = selectedSpeed)
+        }
     }
 
     fun toggleEvent(event: DetectedEvent) {
@@ -288,14 +286,7 @@ fun VideoCompareFullscreenOverlay(
     fun jumpToEvent(event: DetectedEvent) {
         val rawTarget = event.startMs.coerceIn(0L, durationMs.coerceAtLeast(1L))
         val span = selectedSpan()
-        val target = if (
-            span != null &&
-            (rawTarget < (span.first - 15L).coerceAtLeast(0L) || rawTarget > span.second + 15L)
-        ) {
-            span.first
-        } else {
-            rawTarget
-        }
+        val target = span?.first ?: rawTarget
         if (span != null) {
             eventPlayStartMs = span.first
             eventPlayUntilMs = span.second
@@ -303,7 +294,6 @@ fun VideoCompareFullscreenOverlay(
             eventPlayStartMs = null
             eventPlayUntilMs = null
         }
-        pendingSeekTargetMs = target
         positionMs = target
         videoPlayer.seekTo(target)
         viewModel.onVideoPlaybackPosition(target.toInt(), durationMs)
@@ -314,6 +304,7 @@ fun VideoCompareFullscreenOverlay(
         viewModel.remoteSyncCommands.collect { command ->
             when (command) {
                 is RemoteSyncCommand.Play -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
                     val span = selectedSpan()
                     if (span != null) {
                         eventPlayStartMs = span.first
@@ -321,49 +312,50 @@ fun VideoCompareFullscreenOverlay(
                         eventPlayToken++
                         val candidate = command.timeMs ?: videoPlayer.currentPosition.coerceAtLeast(0L)
                         val seekTo = if (
-                            candidate < (span.first - 15L).coerceAtLeast(0L) ||
-                            candidate >= (span.second - 25L).coerceAtLeast(span.first)
+                            hasReachedEventEnd ||
+                            candidate < (span.first - 80L).coerceAtLeast(0L) ||
+                            candidate >= (span.second - 100L).coerceAtLeast(span.first)
                         ) {
                             span.first
                         } else {
                             candidate
                         }
-                        if (kotlin.math.abs(videoPlayer.currentPosition - seekTo) > 40L) {
-                            pendingSeekTargetMs = seekTo
+                        hasReachedEventEnd = false
+                        if (kotlin.math.abs(videoPlayer.currentPosition - seekTo) > 80L) {
                             positionMs = seekTo
                             videoPlayer.seekTo(seekTo)
                         }
-                        viewModel.playVideo()
+                        viewModel.playVideo(positionMs = seekTo, broadcast = false)
                         videoPlayer.playWhenReady = true
                         videoPlayer.play()
                     } else {
+                        val targetPos = command.timeMs
+                            ?: if (videoPlayer.playbackState == Player.STATE_ENDED) 0L else videoPlayer.currentPosition.coerceAtLeast(0L)
                         if (command.timeMs != null && kotlin.math.abs(videoPlayer.currentPosition - command.timeMs) > 120L) {
-                            pendingSeekTargetMs = command.timeMs
+                            positionMs = command.timeMs
                             videoPlayer.seekTo(command.timeMs)
                         } else if (videoPlayer.playbackState == Player.STATE_ENDED) {
                             videoPlayer.seekTo(0L)
                             positionMs = 0L
                         }
-                        viewModel.playVideo()
+                        viewModel.playVideo(positionMs = targetPos, broadcast = false)
                         videoPlayer.playWhenReady = true
                         videoPlayer.play()
                     }
                 }
                 is RemoteSyncCommand.Pause -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
+                    videoPlayer.playWhenReady = false
                     videoPlayer.pause()
-                    viewModel.pauseVideo()
+                    val targetPos = command.timeMs ?: videoPlayer.currentPosition.coerceAtLeast(0L)
                     if (command.timeMs != null && kotlin.math.abs(videoPlayer.currentPosition - command.timeMs) > 80L) {
-                        pendingSeekTargetMs = command.timeMs
                         videoPlayer.seekTo(command.timeMs)
                         positionMs = command.timeMs
                     }
-                    viewModel.notifyPlayerStateChanged(
-                        positionMs = command.timeMs ?: videoPlayer.currentPosition.coerceAtLeast(0L),
-                        durationMs = durationMs,
-                        speed = selectedSpeed,
-                    )
+                    viewModel.pauseVideo(positionMs = targetPos, broadcast = false)
                 }
                 is RemoteSyncCommand.Seek -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
                     val rawTarget = command.timeMs.coerceIn(0L, durationMs.coerceAtLeast(1L))
                     val span = selectedSpan()
                     val target = if (
@@ -378,50 +370,56 @@ fun VideoCompareFullscreenOverlay(
                         eventPlayStartMs = span.first
                         eventPlayUntilMs = span.second
                     }
-                    pendingSeekTargetMs = target
+                    hasReachedEventEnd = false
                     positionMs = target
                     videoPlayer.seekTo(target)
-                    viewModel.onVideoPlaybackPosition(target.toInt(), durationMs)
-                    viewModel.notifyPlayerStateChanged(positionMs = target, durationMs = durationMs, speed = selectedSpeed)
+                    viewModel.updateSyncPositionOnly(target, durationMs)
                 }
                 is RemoteSyncCommand.SetSpeed -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
                     selectedSpeed = command.speed
                     videoPlayer.setPlaybackSpeed(command.speed)
-                    viewModel.notifyPlayerStateChanged(
-                        positionMs = videoPlayer.currentPosition.coerceAtLeast(0L),
-                        durationMs = durationMs,
-                        speed = command.speed,
-                    )
                 }
                 is RemoteSyncCommand.SelectAlgorithm -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
                     val algo = CompareAlgorithm.all.firstOrNull { it.id.equals(command.algorithmId, ignoreCase = true) }
                     if (algo != null && compareSlots[algo]?.isReady == true) {
                         val span = selectedSpan()
                         if (span != null) {
-                            playSpanOnce(span.first, span.second, algo, restartFromStart = true)
+                            playSpanOnce(span.first, span.second, algo, restartFromStart = true, broadcast = false)
                         } else {
-                            viewModel.switchCompareSlot(algo, videoPlayer.currentPosition.coerceAtLeast(0L))
+                            viewModel.switchCompareSlot(
+                                algo,
+                                videoPlayer.currentPosition.coerceAtLeast(0L),
+                                syncNow = false,
+                                broadcast = false,
+                            )
                         }
                     }
                 }
                 is RemoteSyncCommand.ToggleEvent -> {
-                    val next = viewModel.toggleSelectedEvent(command.eventId, broadcast = true)
-                    applyEventSelectionAfterChange(next)
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
+                    val next = viewModel.toggleSelectedEvent(command.eventId, broadcast = false)
+                    applyEventSelectionAfterChange(next, broadcast = false)
                 }
                 is RemoteSyncCommand.SetSelectedEvents -> {
-                    viewModel.setSelectedEventIds(command.eventIds, broadcast = true)
-                    applyEventSelectionAfterChange(viewModel.selectedEventIds.value, command.timeMs)
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
+                    viewModel.setSelectedEventIds(command.eventIds, broadcast = false)
+                    applyEventSelectionAfterChange(viewModel.selectedEventIds.value, command.timeMs, broadcast = false)
                 }
                 is RemoteSyncCommand.UpdatePlaybackSettings -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
                     if (viewModel.selectedEventIds.value.isNotEmpty()) {
-                        applyEventSelectionAfterChange(viewModel.selectedEventIds.value)
+                        applyEventSelectionAfterChange(viewModel.selectedEventIds.value, broadcast = false)
                     }
                 }
                 is RemoteSyncCommand.LoadBundle -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
                     eventPlayStartMs = null
                     eventPlayUntilMs = null
+                    videoPlayer.playWhenReady = false
                     videoPlayer.pause()
-                    viewModel.pauseVideo()
+                    viewModel.pauseVideo(broadcast = false)
                     viewModel.loadBundleById(command.bundleId, command.eventFileName)
                 }
                 is RemoteSyncCommand.SelectEventFile -> {
@@ -435,14 +433,19 @@ fun VideoCompareFullscreenOverlay(
                     viewModel.deleteEventFile(command.fileName, broadcast = false)
                 }
                 RemoteSyncCommand.ClearMedia -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
                     eventPlayStartMs = null
                     eventPlayUntilMs = null
+                    videoPlayer.playWhenReady = false
                     videoPlayer.pause()
-                    viewModel.pauseVideo()
+                    viewModel.pauseVideo(broadcast = false)
                     viewModel.clearLoadedMedia(broadcastToDesktop = false)
                 }
                 is RemoteSyncCommand.UpdateDesktopLibrary -> {
                     viewModel.setDesktopLibraryBundles(command.bundles)
+                }
+                is RemoteSyncCommand.SetRatingSession -> {
+                    // Handled by viewModel.isRatingSessionActive
                 }
                 RemoteSyncCommand.RequestState -> {
                     viewModel.notifyPlayerStateChanged(
@@ -458,7 +461,6 @@ fun VideoCompareFullscreenOverlay(
     LaunchedEffect(
         videoPlaying,
         isScrubbing,
-        pendingSeekTargetMs,
         eventPlayToken,
         selectedEventIds,
         eventHeadroomMs,
@@ -466,31 +468,32 @@ fun VideoCompareFullscreenOverlay(
     ) {
         var armed = false
         while (isActive) {
-            if (!isScrubbing && pendingSeekTargetMs == null) {
+            if (!isScrubbing) {
                 positionMs = videoPlayer.currentPosition.coerceAtLeast(0L)
                 val activeSpan = selectedSpan()
                 val until = activeSpan?.second ?: eventPlayUntilMs
                 val start = activeSpan?.first ?: eventPlayStartMs
                 var reachedEventEnd = false
                 if (until != null && start != null) {
-                    if (!armed && positionMs + 250L >= start) armed = true
+                    if (!armed && positionMs in (start - 80L)..(start + 350L)) armed = true
                     if (armed && positionMs >= until) {
                         if (activeSpan == null) {
                             eventPlayStartMs = null
                             eventPlayUntilMs = null
                         }
+                        videoPlayer.playWhenReady = false
                         videoPlayer.pause()
-                        viewModel.pauseVideo()
-                        videoPlayer.seekTo(until)
-                        positionMs = until
-                        viewModel.notifyPlayerStateChanged(positionMs = until, durationMs = durationMs, speed = selectedSpeed)
+                        videoPlayer.seekTo(start)
+                        positionMs = start
+                        hasReachedEventEnd = false
+                        viewModel.pauseVideo(positionMs = start, broadcast = true)
                         reachedEventEnd = true
                     }
                 }
                 if (reachedEventEnd) return@LaunchedEffect
                 // While buffering after a seek the player already reports the target
                 // time but shows the old frame, so haptics wait for real playback.
-                if (videoPlaying && videoPlayer.isPlaying) {
+                if (videoPlaying && videoPlayer.isPlaying && videoPlayer.playbackState == Player.STATE_READY) {
                     viewModel.onVideoPlaybackPosition(positionMs.toInt(), knownDurationMs(videoPlayer))
                 }
             }
@@ -539,14 +542,21 @@ fun VideoCompareFullscreenOverlay(
                 if (controlsVisible) {
                     OutlinedButton(
                         onClick = {
-                            keepControlsVisible()
-                            debugVisible = !debugVisible
+                            if (!isRatingSessionActive) {
+                                keepControlsVisible()
+                                debugVisible = !debugVisible
+                            }
                         },
+                        enabled = !isRatingSessionActive,
                         modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
                         shape = RoundedCornerShape(50),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp),
                     ) {
-                        Text("!", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "!",
+                            color = if (isRatingSessionActive) Color.Gray else Color.White,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
                     }
 
                     Surface(
@@ -585,10 +595,15 @@ fun VideoCompareFullscreenOverlay(
                                             eventPlayStartMs = span.first
                                             eventPlayUntilMs = span.second
                                         }
+                                        hasReachedEventEnd = false
                                         positionMs = targetMs
-                                        pendingSeekTargetMs = targetMs
                                         videoPlayer.seekTo(targetMs)
                                         viewModel.onVideoPlaybackPosition(targetMs.toInt(), durationMs)
+                                        viewModel.notifyPlayerStateChanged(
+                                            positionMs = targetMs,
+                                            durationMs = durationMs,
+                                            speed = selectedSpeed,
+                                        )
                                         isScrubbing = false
                                     },
                                     valueRange = 0f..durationMs.coerceAtLeast(1L).toFloat(),
@@ -642,18 +657,23 @@ fun VideoCompareFullscreenOverlay(
                                     onClick = {
                                         keepControlsVisible()
                                         if (videoPlayer.isPlaying) {
+                                            videoPlayer.playWhenReady = false
                                             videoPlayer.pause()
-                                            viewModel.pauseVideo()
+                                            viewModel.pauseVideo(positionMs = videoPlayer.currentPosition.coerceAtLeast(0L), broadcast = true)
                                         } else {
                                             val span = selectedSpan()
                                             if (span != null) {
-                                                playSpanOnce(span.first, span.second, algorithm = null, restartFromStart = false)
+                                                val (spanStart, spanEnd) = span
+                                                val cur = videoPlayer.currentPosition.coerceAtLeast(0L)
+                                                val atLimit = hasReachedEventEnd || cur >= (spanEnd - 100L).coerceAtLeast(spanStart) || cur < (spanStart - 80L).coerceAtLeast(0L)
+                                                playSpanOnce(spanStart, spanEnd, algorithm = null, restartFromStart = atLimit)
                                             } else {
                                                 if (videoPlayer.playbackState == Player.STATE_ENDED) {
                                                     videoPlayer.seekTo(0L)
                                                     positionMs = 0L
                                                 }
                                                 viewModel.playVideo()
+                                                videoPlayer.playWhenReady = true
                                                 videoPlayer.play()
                                             }
                                         }

@@ -17,8 +17,12 @@ import kotlinx.coroutines.delay
 import android.os.SystemClock
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -68,6 +72,14 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         onOpenBundleFileStream = ::openBundleFileStream,
     )
     val syncStatus = syncServer.status
+
+    private val _ratingSessionActive = MutableStateFlow(false)
+    val isRatingSessionActive: StateFlow<Boolean> = combine(
+        syncStatus,
+        _ratingSessionActive,
+    ) { status, active ->
+        status.connectedClientIp != null && active
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _remoteSyncCommands = MutableSharedFlow<RemoteSyncCommand>(extraBufferCapacity = 32)
     val remoteSyncCommands = _remoteSyncCommands.asSharedFlow()
@@ -865,6 +877,9 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
                     command.tailroomMs?.let { setEventTailroomMs(it, broadcast = false) }
                     _remoteSyncCommands.tryEmit(command)
                 }
+                is RemoteSyncCommand.SetRatingSession -> {
+                    _ratingSessionActive.value = command.active
+                }
                 else -> {
                     _remoteSyncCommands.tryEmit(command)
                 }
@@ -1400,7 +1415,12 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun switchCompareSlot(algorithm: CompareAlgorithm, positionMs: Long, syncNow: Boolean = true) {
+    fun switchCompareSlot(
+        algorithm: CompareAlgorithm,
+        positionMs: Long,
+        syncNow: Boolean = true,
+        broadcast: Boolean = true,
+    ) {
         val slot = _compareSlots.value[algorithm] ?: return
         if (slot.map == null) {
             _videoError.value = "Load algorithm ${algorithm.shortLabel} WAV first."
@@ -1410,7 +1430,9 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         lastSyncPositionMs = positionMs.coerceAtLeast(0L)
         applyCompareSlot(algorithm, seekPositionMs = if (syncNow) positionMs else null)
         _videoError.value = null
-        broadcastSyncState(positionMs = positionMs, isHeartbeat = false)
+        if (broadcast) {
+            broadcastSyncState(positionMs = positionMs, isHeartbeat = false)
+        }
     }
 
     fun hasAnyCompareSlotReady(): Boolean {
@@ -1479,7 +1501,7 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun playVideo() {
+    fun playVideo(positionMs: Long? = null, broadcast: Boolean = true) {
         if (loadedVideoUri == null) {
             _videoError.value = "Load a video file before playing."
             return
@@ -1495,6 +1517,10 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
 
+        if (positionMs != null) {
+            lastSyncPositionMs = positionMs.coerceAtLeast(0L)
+        }
+
         if (!videoHaptic.hasLoadedTrack()) {
             val active = _activeCompareAlgorithm.value
                 ?: _compareSlots.value.entries.firstOrNull { it.value.isReady }?.key
@@ -1507,13 +1533,26 @@ class HapticViewModel(application: Application) : AndroidViewModel(application) 
         stopAudio()
         _videoPlaying.value = true
         _videoError.value = null
-        broadcastSyncState(isHeartbeat = false)
+        lastHeartbeatElapsedMs = SystemClock.elapsedRealtime()
+        if (broadcast) {
+            broadcastSyncState(positionMs = lastSyncPositionMs, isHeartbeat = false)
+        }
     }
 
-    fun pauseVideo() {
+    fun pauseVideo(positionMs: Long? = null, broadcast: Boolean = true) {
+        if (positionMs != null) {
+            lastSyncPositionMs = positionMs.coerceAtLeast(0L)
+        }
         _videoPlaying.value = false
         videoHaptic.stop()
-        broadcastSyncState(isHeartbeat = false)
+        if (broadcast) {
+            broadcastSyncState(positionMs = lastSyncPositionMs, isHeartbeat = false)
+        }
+    }
+
+    fun updateSyncPositionOnly(positionMs: Long, videoDurationMs: Long = 0L) {
+        lastSyncPositionMs = positionMs.coerceAtLeast(0L)
+        if (videoDurationMs > 0L) lastSyncDurationMs = videoDurationMs
     }
 
     fun stopVideo() {

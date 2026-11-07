@@ -3,6 +3,7 @@ package com.example.haptictester.ui
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts.OpenDocument
 import androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree
@@ -69,6 +70,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.example.haptictester.haptic.CompareAlgorithm
@@ -144,10 +146,21 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
     val videoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
-            repeatMode = Player.REPEAT_MODE_OFF
-            volume = 1f
-        }
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 2_000,
+                /* maxBufferMs = */ 10_000,
+                /* bufferForPlaybackMs = */ 50,
+                /* bufferForPlaybackAfterRebufferMs = */ 100,
+            )
+            .build()
+        ExoPlayer.Builder(context)
+            .setLoadControl(loadControl)
+            .build()
+            .apply {
+                repeatMode = Player.REPEAT_MODE_OFF
+                volume = 1f
+            }
     }
 
     DisposableEffect(videoPlayer) {
@@ -162,6 +175,7 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     var pendingCompareAlgorithm by remember { mutableStateOf<CompareAlgorithm?>(null) }
     var eventPlayStartMs by remember { mutableStateOf<Long?>(null) }
     var eventPlayUntilMs by remember { mutableStateOf<Long?>(null) }
+    var suppressRemoteSyncEchoUntilMs by remember(videoPlayer) { mutableStateOf(0L) }
 
     val openAudioLauncher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
         if (uri != null) viewModel.loadAudio(uri)
@@ -218,11 +232,13 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                 videoHasAudio = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO }
             }
 
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying && !videoPlaying) {
-                    viewModel.playVideo()
-                } else if (!isPlaying && videoPlaying) {
-                    viewModel.pauseVideo()
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (isVideoFullscreen) return
+                val shouldBroadcast = SystemClock.elapsedRealtime() > suppressRemoteSyncEchoUntilMs
+                if (playWhenReady && !videoPlaying) {
+                    viewModel.playVideo(broadcast = shouldBroadcast)
+                } else if (!playWhenReady && videoPlaying) {
+                    viewModel.pauseVideo(broadcast = shouldBroadcast)
                 }
             }
 
@@ -233,12 +249,17 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
             ) {
                 if (!isVideoFullscreen && reason == Player.DISCONTINUITY_REASON_SEEK) {
                     val rawPos = newPosition.positionMs.coerceAtLeast(0L)
+                    if (SystemClock.elapsedRealtime() <= suppressRemoteSyncEchoUntilMs) {
+                        viewModel.updateSyncPositionOnly(rawPos, videoDurationMs)
+                        return
+                    }
                     val span = viewModel.computeSelectedSpanMs(viewModel.selectedEventIds.value, videoDurationMs)
                     if (span != null && (rawPos < (span.first - 15L).coerceAtLeast(0L) || rawPos > span.second + 15L)) {
                         eventPlayStartMs = span.first
                         eventPlayUntilMs = span.second
+                        suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1000L
                         videoPlayer.seekTo(span.first)
-                        viewModel.onVideoPlaybackPosition(span.first.toInt(), videoDurationMs)
+                        viewModel.updateSyncPositionOnly(span.first, videoDurationMs)
                         viewModel.notifyPlayerStateChanged(
                             positionMs = span.first,
                             durationMs = videoDurationMs,
@@ -270,18 +291,27 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
         onDispose { videoPlayer.removeListener(listener) }
     }
 
-    fun applyDiagnosticEventSelectionChange(nextIds: Set<String>, remoteTimeMs: Long? = null) {
+    fun applyDiagnosticEventSelectionChange(
+        nextIds: Set<String>,
+        remoteTimeMs: Long? = null,
+        broadcast: Boolean = true,
+    ) {
+        suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
+        videoPlayer.playWhenReady = false
         videoPlayer.pause()
-        viewModel.pauseVideo()
+        viewModel.pauseVideo(broadcast = false)
         if (nextIds.isEmpty()) {
             eventPlayStartMs = null
             eventPlayUntilMs = null
             val pos = videoPlayer.currentPosition.coerceAtLeast(0L)
-            viewModel.notifyPlayerStateChanged(
-                positionMs = pos,
-                durationMs = videoDurationMs,
-                speed = videoPlayer.playbackParameters.speed,
-            )
+            viewModel.updateSyncPositionOnly(pos, videoDurationMs)
+            if (broadcast) {
+                viewModel.notifyPlayerStateChanged(
+                    positionMs = pos,
+                    durationMs = videoDurationMs,
+                    speed = videoPlayer.playbackParameters.speed,
+                )
+            }
             return
         }
         val span = viewModel.computeSelectedSpanMs(nextIds, videoDurationMs)
@@ -294,20 +324,22 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
         eventPlayStartMs = spanStartMs
         eventPlayUntilMs = spanEndMs
         val currentPos = videoPlayer.currentPosition.coerceAtLeast(0L)
-        val targetPos = when {
-            remoteTimeMs != null && remoteTimeMs in spanStartMs..spanEndMs -> remoteTimeMs
-            currentPos < (spanStartMs - 15L).coerceAtLeast(0L) || currentPos > spanEndMs + 15L -> spanStartMs
-            else -> currentPos
+        val targetPos = if (remoteTimeMs != null && remoteTimeMs in spanStartMs..spanEndMs) {
+            remoteTimeMs
+        } else {
+            spanStartMs
         }
-        if (kotlin.math.abs(currentPos - targetPos) > 15L) {
+        if (kotlin.math.abs(currentPos - targetPos) > 40L) {
             videoPlayer.seekTo(targetPos)
-            viewModel.onVideoPlaybackPosition(targetPos.toInt(), videoDurationMs)
         }
-        viewModel.notifyPlayerStateChanged(
-            positionMs = targetPos,
-            durationMs = videoDurationMs,
-            speed = videoPlayer.playbackParameters.speed,
-        )
+        viewModel.updateSyncPositionOnly(targetPos, videoDurationMs)
+        if (broadcast) {
+            viewModel.notifyPlayerStateChanged(
+                positionMs = targetPos,
+                durationMs = videoDurationMs,
+                speed = videoPlayer.playbackParameters.speed,
+            )
+        }
     }
 
     // Handle remote commands from Desktop when not in fullscreen overlay
@@ -318,48 +350,50 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
 
             when (command) {
                 is RemoteSyncCommand.Play -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
                     if (span != null) {
                         eventPlayStartMs = span.first
                         eventPlayUntilMs = span.second
                         val candidate = command.timeMs ?: videoPlayer.currentPosition.coerceAtLeast(0L)
                         val seekTo = if (
-                            candidate < (span.first - 15L).coerceAtLeast(0L) ||
-                            candidate >= (span.second - 25L).coerceAtLeast(span.first)
+                            candidate < (span.first - 80L).coerceAtLeast(0L) ||
+                            candidate >= (span.second - 80L).coerceAtLeast(span.first)
                         ) {
                             span.first
                         } else {
                             candidate
                         }
-                        if (kotlin.math.abs(videoPlayer.currentPosition - seekTo) > 40L) {
+                        if (kotlin.math.abs(videoPlayer.currentPosition - seekTo) > 80L) {
                             videoPlayer.seekTo(seekTo)
                         }
-                        viewModel.playVideo()
+                        viewModel.playVideo(positionMs = seekTo, broadcast = false)
                         videoPlayer.playWhenReady = true
                         videoPlayer.play()
                     } else {
+                        val targetPos = command.timeMs
+                            ?: if (videoPlayer.playbackState == Player.STATE_ENDED) 0L else videoPlayer.currentPosition.coerceAtLeast(0L)
                         if (command.timeMs != null && kotlin.math.abs(videoPlayer.currentPosition - command.timeMs) > 120L) {
                             videoPlayer.seekTo(command.timeMs)
                         } else if (videoPlayer.playbackState == Player.STATE_ENDED) {
                             videoPlayer.seekTo(0L)
                         }
-                        viewModel.playVideo()
+                        viewModel.playVideo(positionMs = targetPos, broadcast = false)
                         videoPlayer.playWhenReady = true
                         videoPlayer.play()
                     }
                 }
                 is RemoteSyncCommand.Pause -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
+                    videoPlayer.playWhenReady = false
                     videoPlayer.pause()
-                    viewModel.pauseVideo()
+                    val targetPos = command.timeMs ?: videoPlayer.currentPosition.coerceAtLeast(0L)
                     if (command.timeMs != null && kotlin.math.abs(videoPlayer.currentPosition - command.timeMs) > 80L) {
                         videoPlayer.seekTo(command.timeMs)
                     }
-                    viewModel.notifyPlayerStateChanged(
-                        positionMs = command.timeMs ?: videoPlayer.currentPosition.coerceAtLeast(0L),
-                        durationMs = videoDurationMs,
-                        speed = videoPlayer.playbackParameters.speed,
-                    )
+                    viewModel.pauseVideo(positionMs = targetPos, broadcast = false)
                 }
                 is RemoteSyncCommand.Seek -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
                     val rawTarget = command.timeMs.coerceAtLeast(0L)
                     val target = if (
                         span != null &&
@@ -374,55 +408,62 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                         eventPlayUntilMs = span.second
                     }
                     videoPlayer.seekTo(target)
-                    viewModel.onVideoPlaybackPosition(target.toInt(), videoDurationMs)
-                    viewModel.notifyPlayerStateChanged(
-                        positionMs = target,
-                        durationMs = videoDurationMs,
-                        speed = videoPlayer.playbackParameters.speed,
-                    )
+                    viewModel.updateSyncPositionOnly(target, videoDurationMs)
                 }
                 is RemoteSyncCommand.SetSpeed -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
                     videoPlayer.setPlaybackSpeed(command.speed)
-                    viewModel.notifyPlayerStateChanged(
-                        positionMs = videoPlayer.currentPosition.coerceAtLeast(0L),
-                        durationMs = videoDurationMs,
-                        speed = command.speed,
-                    )
                 }
                 is RemoteSyncCommand.SelectAlgorithm -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
                     val algo = CompareAlgorithm.all.firstOrNull { it.id.equals(command.algorithmId, ignoreCase = true) }
                     if (algo != null && compareSlots[algo]?.isReady == true) {
                         if (span != null) {
                             eventPlayStartMs = span.first
                             eventPlayUntilMs = span.second
-                            viewModel.switchCompareSlot(algo, span.first, syncNow = false)
-                            videoPlayer.seekTo(span.first)
-                            viewModel.playVideo()
+                            viewModel.switchCompareSlot(algo, span.first, syncNow = false, broadcast = false)
+                            if (kotlin.math.abs(videoPlayer.currentPosition - span.first) > 80L) {
+                                videoPlayer.seekTo(span.first)
+                            }
+                            viewModel.playVideo(positionMs = span.first, broadcast = false)
                             videoPlayer.playWhenReady = true
                             videoPlayer.play()
                         } else {
-                            viewModel.switchCompareSlot(algo, videoPlayer.currentPosition.coerceAtLeast(0L))
+                            viewModel.switchCompareSlot(
+                                algo,
+                                videoPlayer.currentPosition.coerceAtLeast(0L),
+                                syncNow = false,
+                                broadcast = false,
+                            )
                         }
                     }
                 }
                 is RemoteSyncCommand.ToggleEvent -> {
-                    val next = viewModel.toggleSelectedEvent(command.eventId, broadcast = true)
-                    applyDiagnosticEventSelectionChange(next)
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
+                    val next = viewModel.toggleSelectedEvent(command.eventId, broadcast = false)
+                    applyDiagnosticEventSelectionChange(next, broadcast = false)
                 }
                 is RemoteSyncCommand.SetSelectedEvents -> {
-                    viewModel.setSelectedEventIds(command.eventIds, broadcast = true)
-                    applyDiagnosticEventSelectionChange(viewModel.selectedEventIds.value, command.timeMs)
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
+                    viewModel.setSelectedEventIds(command.eventIds, broadcast = false)
+                    applyDiagnosticEventSelectionChange(viewModel.selectedEventIds.value, command.timeMs, broadcast = false)
                 }
                 is RemoteSyncCommand.UpdatePlaybackSettings -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
                     if (viewModel.selectedEventIds.value.isNotEmpty()) {
-                        applyDiagnosticEventSelectionChange(viewModel.selectedEventIds.value)
+                        applyDiagnosticEventSelectionChange(viewModel.selectedEventIds.value, broadcast = false)
                     }
                 }
+                is RemoteSyncCommand.SetRatingSession -> {
+                    // Handled at ViewModel level
+                }
                 is RemoteSyncCommand.LoadBundle -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
                     eventPlayStartMs = null
                     eventPlayUntilMs = null
+                    videoPlayer.playWhenReady = false
                     videoPlayer.pause()
-                    viewModel.pauseVideo()
+                    viewModel.pauseVideo(broadcast = false)
                     viewModel.loadBundleById(command.bundleId, command.eventFileName)
                 }
                 is RemoteSyncCommand.SelectEventFile -> {
@@ -436,8 +477,10 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                     viewModel.deleteEventFile(command.fileName, broadcast = false)
                 }
                 is RemoteSyncCommand.ClearMedia -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
                     eventPlayStartMs = null
                     eventPlayUntilMs = null
+                    videoPlayer.playWhenReady = false
                     videoPlayer.stop()
                     videoPlayer.clearMediaItems()
                     loadedVideoUri = null
@@ -478,23 +521,26 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
             val until = activeSpan?.second ?: eventPlayUntilMs
             val start = activeSpan?.first ?: eventPlayStartMs
             if (until != null && start != null) {
-                if (!armed && pos + 250L >= start) armed = true
+                if (!armed && pos in (start - 80L)..(start + 400L)) armed = true
                 if (armed && pos >= until) {
                     if (activeSpan == null) {
                         eventPlayStartMs = null
                         eventPlayUntilMs = null
                     }
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
+                    videoPlayer.playWhenReady = false
                     videoPlayer.pause()
-                    viewModel.pauseVideo()
-                    videoPlayer.seekTo(until)
-                    viewModel.notifyPlayerStateChanged(positionMs = until, durationMs = videoDurationMs)
+                    videoPlayer.seekTo(start)
+                    viewModel.pauseVideo(positionMs = start, broadcast = true)
                     return@LaunchedEffect
                 }
             }
-            viewModel.onVideoPlaybackPosition(
-                positionMs = pos.toInt(),
-                videoDurationMs = videoDurationMs,
-            )
+            if (videoPlayer.isPlaying && videoPlayer.playbackState == Player.STATE_READY) {
+                viewModel.onVideoPlaybackPosition(
+                    positionMs = pos.toInt(),
+                    videoDurationMs = videoDurationMs,
+                )
+            }
             delay(20)
         }
     }
@@ -618,17 +664,20 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                             openCompareLauncher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/*"))
                         },
                         onSwitchCompareSlot = { algorithm ->
+                            suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
                             val span = viewModel.computeSelectedSpanMs(selectedEventIds, videoDurationMs)
                             if (span != null) {
                                 eventPlayStartMs = span.first
                                 eventPlayUntilMs = span.second
-                                viewModel.switchCompareSlot(algorithm, span.first, syncNow = false)
-                                videoPlayer.seekTo(span.first)
-                                viewModel.playVideo()
+                                viewModel.switchCompareSlot(algorithm, span.first, syncNow = false, broadcast = false)
+                                if (kotlin.math.abs(videoPlayer.currentPosition - span.first) > 80L) {
+                                    videoPlayer.seekTo(span.first)
+                                }
+                                viewModel.playVideo(positionMs = span.first, broadcast = true)
                                 videoPlayer.playWhenReady = true
                                 videoPlayer.play()
                             } else {
-                                viewModel.switchCompareSlot(algorithm, videoPlayer.currentPosition)
+                                viewModel.switchCompareSlot(algorithm, videoPlayer.currentPosition.coerceAtLeast(0L))
                             }
                         },
                         onSelectEventFile = { fileName ->
@@ -637,27 +686,36 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                             viewModel.selectEventFile(fileName, broadcast = true)
                         },
                         onPlayVideo = {
+                            suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
                             val span = viewModel.computeSelectedSpanMs(selectedEventIds, videoDurationMs)
+                            var playPos = videoPlayer.currentPosition.coerceAtLeast(0L)
                             if (span != null) {
                                 eventPlayStartMs = span.first
                                 eventPlayUntilMs = span.second
                                 val cur = videoPlayer.currentPosition.coerceAtLeast(0L)
                                 if (
-                                    cur < (span.first - 15L).coerceAtLeast(0L) ||
-                                    cur >= (span.second - 25L).coerceAtLeast(span.first)
+                                    cur < (span.first - 80L).coerceAtLeast(0L) ||
+                                    cur >= (span.second - 80L).coerceAtLeast(span.first)
                                 ) {
-                                    videoPlayer.seekTo(span.first)
+                                    playPos = span.first
+                                    if (kotlin.math.abs(cur - span.first) > 80L) {
+                                        videoPlayer.seekTo(span.first)
+                                    }
                                 }
                             }
-                            viewModel.playVideo()
+                            viewModel.playVideo(positionMs = playPos, broadcast = true)
                             videoPlayer.playWhenReady = true
                             videoPlayer.play()
                         },
                         onPauseVideo = {
+                            suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
+                            videoPlayer.playWhenReady = false
                             videoPlayer.pause()
-                            viewModel.pauseVideo()
+                            viewModel.pauseVideo(positionMs = videoPlayer.currentPosition.coerceAtLeast(0L), broadcast = true)
                         },
                         onStopVideo = {
+                            suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
+                            videoPlayer.playWhenReady = false
                             videoPlayer.pause()
                             val span = viewModel.computeSelectedSpanMs(selectedEventIds, videoDurationMs)
                             val resetPos = span?.first ?: 0L
@@ -667,6 +725,7 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                         onFullscreen = {
                             if (loadedVideoUri == null) return@VideoTab
                             if (!videoPlaying) {
+                                suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
                                 viewModel.playVideo()
                                 videoPlayer.playWhenReady = true
                                 videoPlayer.play()

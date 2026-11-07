@@ -49,6 +49,7 @@ sealed interface RemoteSyncCommand {
     data class SelectEventFile(val fileName: String) : RemoteSyncCommand
     data class DeleteEventFile(val fileName: String) : RemoteSyncCommand
     data class UpdateDesktopLibrary(val bundles: List<String>) : RemoteSyncCommand
+    data class SetRatingSession(val active: Boolean) : RemoteSyncCommand
     data object ClearMedia : RemoteSyncCommand
     data object RequestState : RemoteSyncCommand
 }
@@ -609,6 +610,10 @@ class DesktopSyncServer(
                     null
                 }
                 onCommand(RemoteSyncCommand.UpdatePlaybackSettings(headroomMs, tailroomMs))
+            }
+            "COMMAND_SET_RATING_SESSION" -> {
+                val active = obj.optBoolean("active", false)
+                onCommand(RemoteSyncCommand.SetRatingSession(active))
             }
             "COMMAND_LOAD_BUNDLE" -> {
                 val bundleId = sanitizeSegment(obj.optString("bundleId").trim())
