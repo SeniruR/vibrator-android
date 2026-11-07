@@ -43,9 +43,13 @@ sealed interface RemoteSyncCommand {
     data class SetSpeed(val speed: Float) : RemoteSyncCommand
     data class SelectAlgorithm(val algorithmId: String) : RemoteSyncCommand
     data class ToggleEvent(val eventId: String) : RemoteSyncCommand
-    data class SetSelectedEvents(val eventIds: Set<String>) : RemoteSyncCommand
-    data class LoadBundle(val bundleId: String) : RemoteSyncCommand
+    data class SetSelectedEvents(val eventIds: Set<String>, val timeMs: Long? = null) : RemoteSyncCommand
+    data class UpdatePlaybackSettings(val headroomMs: Long? = null, val tailroomMs: Long? = null) : RemoteSyncCommand
+    data class LoadBundle(val bundleId: String, val eventFileName: String? = null) : RemoteSyncCommand
+    data class SelectEventFile(val fileName: String) : RemoteSyncCommand
+    data class DeleteEventFile(val fileName: String) : RemoteSyncCommand
     data class UpdateDesktopLibrary(val bundles: List<String>) : RemoteSyncCommand
+    data class SetRatingSession(val active: Boolean) : RemoteSyncCommand
     data object ClearMedia : RemoteSyncCommand
     data object RequestState : RemoteSyncCommand
 }
@@ -587,12 +591,48 @@ class DesktopSyncServer(
                         if (id.isNotEmpty()) ids += id
                     }
                 }
-                onCommand(RemoteSyncCommand.SetSelectedEvents(ids))
+                val timeMs = if (obj.has("timeMs") && !obj.isNull("timeMs")) {
+                    obj.optLong("timeMs", 0L).coerceAtLeast(0L)
+                } else {
+                    null
+                }
+                onCommand(RemoteSyncCommand.SetSelectedEvents(ids, timeMs))
+            }
+            "COMMAND_SET_PLAYBACK_SETTINGS" -> {
+                val headroomMs = if (obj.has("headroomMs") && !obj.isNull("headroomMs")) {
+                    obj.optLong("headroomMs", 500L).coerceIn(0L, 5000L)
+                } else {
+                    null
+                }
+                val tailroomMs = if (obj.has("tailroomMs") && !obj.isNull("tailroomMs")) {
+                    obj.optLong("tailroomMs", 0L).coerceIn(0L, 5000L)
+                } else {
+                    null
+                }
+                onCommand(RemoteSyncCommand.UpdatePlaybackSettings(headroomMs, tailroomMs))
+            }
+            "COMMAND_SET_RATING_SESSION" -> {
+                val active = obj.optBoolean("active", false)
+                onCommand(RemoteSyncCommand.SetRatingSession(active))
             }
             "COMMAND_LOAD_BUNDLE" -> {
                 val bundleId = sanitizeSegment(obj.optString("bundleId").trim())
+                val rawEventFile = obj.optString("eventFile").trim()
+                val eventFile = if (rawEventFile.isNotEmpty()) sanitizeSegment(rawEventFile) else null
                 if (bundleId.isNotEmpty()) {
-                    onCommand(RemoteSyncCommand.LoadBundle(bundleId))
+                    onCommand(RemoteSyncCommand.LoadBundle(bundleId, eventFile))
+                }
+            }
+            "COMMAND_SELECT_EVENT_FILE" -> {
+                val fileName = sanitizeSegment(obj.optString("fileName").trim())
+                if (fileName.isNotEmpty()) {
+                    onCommand(RemoteSyncCommand.SelectEventFile(fileName))
+                }
+            }
+            "COMMAND_DELETE_EVENT_FILE" -> {
+                val fileName = sanitizeSegment(obj.optString("fileName").trim())
+                if (fileName.isNotEmpty()) {
+                    onCommand(RemoteSyncCommand.DeleteEventFile(fileName))
                 }
             }
             "COMMAND_CLEAR_MEDIA" -> {

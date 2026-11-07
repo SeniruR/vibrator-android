@@ -3,6 +3,7 @@ package com.example.haptictester.ui
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts.OpenDocument
 import androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,6 +31,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -38,6 +42,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -65,6 +70,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.example.haptictester.haptic.CompareAlgorithm
@@ -120,6 +126,10 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     val folderSummary by viewModel.folderSummary.collectAsState()
     val detectedEvents by viewModel.detectedEvents.collectAsState()
     val selectedEventIds by viewModel.selectedEventIds.collectAsState()
+    val eventHeadroomMs by viewModel.eventHeadroomMs.collectAsState()
+    val eventTailroomMs by viewModel.eventTailroomMs.collectAsState()
+    val availableEventFiles by viewModel.availableEventFiles.collectAsState()
+    val activeEventFileName by viewModel.activeEventFileName.collectAsState()
     val syncStatus by viewModel.syncStatus.collectAsState()
     val syncRootFolderName by viewModel.syncRootFolderName.collectAsState()
     val activeBundleId by viewModel.activeBundleId.collectAsState()
@@ -136,10 +146,21 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
     val videoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
-            repeatMode = Player.REPEAT_MODE_OFF
-            volume = 1f
-        }
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 2_000,
+                /* maxBufferMs = */ 10_000,
+                /* bufferForPlaybackMs = */ 50,
+                /* bufferForPlaybackAfterRebufferMs = */ 100,
+            )
+            .build()
+        ExoPlayer.Builder(context)
+            .setLoadControl(loadControl)
+            .build()
+            .apply {
+                repeatMode = Player.REPEAT_MODE_OFF
+                volume = 1f
+            }
     }
 
     DisposableEffect(videoPlayer) {
@@ -154,6 +175,7 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
     var pendingCompareAlgorithm by remember { mutableStateOf<CompareAlgorithm?>(null) }
     var eventPlayStartMs by remember { mutableStateOf<Long?>(null) }
     var eventPlayUntilMs by remember { mutableStateOf<Long?>(null) }
+    var suppressRemoteSyncEchoUntilMs by remember(videoPlayer) { mutableStateOf(0L) }
 
     val openAudioLauncher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
         if (uri != null) viewModel.loadAudio(uri)
@@ -210,11 +232,13 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                 videoHasAudio = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO }
             }
 
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying && !videoPlaying) {
-                    viewModel.playVideo()
-                } else if (!isPlaying && videoPlaying) {
-                    viewModel.pauseVideo()
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (isVideoFullscreen) return
+                val shouldBroadcast = SystemClock.elapsedRealtime() > suppressRemoteSyncEchoUntilMs
+                if (playWhenReady && !videoPlaying) {
+                    viewModel.playVideo(broadcast = shouldBroadcast)
+                } else if (!playWhenReady && videoPlaying) {
+                    viewModel.pauseVideo(broadcast = shouldBroadcast)
                 }
             }
 
@@ -224,11 +248,30 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                 reason: Int,
             ) {
                 if (!isVideoFullscreen && reason == Player.DISCONTINUITY_REASON_SEEK) {
-                    viewModel.notifyPlayerStateChanged(
-                        positionMs = newPosition.positionMs.coerceAtLeast(0L),
-                        durationMs = videoDurationMs,
-                        speed = videoPlayer.playbackParameters.speed,
-                    )
+                    val rawPos = newPosition.positionMs.coerceAtLeast(0L)
+                    if (SystemClock.elapsedRealtime() <= suppressRemoteSyncEchoUntilMs) {
+                        viewModel.updateSyncPositionOnly(rawPos, videoDurationMs)
+                        return
+                    }
+                    val span = viewModel.computeSelectedSpanMs(viewModel.selectedEventIds.value, videoDurationMs)
+                    if (span != null && (rawPos < (span.first - 15L).coerceAtLeast(0L) || rawPos > span.second + 15L)) {
+                        eventPlayStartMs = span.first
+                        eventPlayUntilMs = span.second
+                        suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1000L
+                        videoPlayer.seekTo(span.first)
+                        viewModel.updateSyncPositionOnly(span.first, videoDurationMs)
+                        viewModel.notifyPlayerStateChanged(
+                            positionMs = span.first,
+                            durationMs = videoDurationMs,
+                            speed = videoPlayer.playbackParameters.speed,
+                        )
+                    } else {
+                        viewModel.notifyPlayerStateChanged(
+                            positionMs = rawPos,
+                            durationMs = videoDurationMs,
+                            speed = videoPlayer.playbackParameters.speed,
+                        )
+                    }
                 }
             }
 
@@ -248,128 +291,196 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
         onDispose { videoPlayer.removeListener(listener) }
     }
 
+    fun applyDiagnosticEventSelectionChange(
+        nextIds: Set<String>,
+        remoteTimeMs: Long? = null,
+        broadcast: Boolean = true,
+    ) {
+        suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
+        videoPlayer.playWhenReady = false
+        videoPlayer.pause()
+        viewModel.pauseVideo(broadcast = false)
+        if (nextIds.isEmpty()) {
+            eventPlayStartMs = null
+            eventPlayUntilMs = null
+            val pos = videoPlayer.currentPosition.coerceAtLeast(0L)
+            viewModel.updateSyncPositionOnly(pos, videoDurationMs)
+            if (broadcast) {
+                viewModel.notifyPlayerStateChanged(
+                    positionMs = pos,
+                    durationMs = videoDurationMs,
+                    speed = videoPlayer.playbackParameters.speed,
+                )
+            }
+            return
+        }
+        val span = viewModel.computeSelectedSpanMs(nextIds, videoDurationMs)
+        if (span == null) {
+            eventPlayStartMs = null
+            eventPlayUntilMs = null
+            return
+        }
+        val (spanStartMs, spanEndMs) = span
+        eventPlayStartMs = spanStartMs
+        eventPlayUntilMs = spanEndMs
+        val currentPos = videoPlayer.currentPosition.coerceAtLeast(0L)
+        val targetPos = if (remoteTimeMs != null && remoteTimeMs in spanStartMs..spanEndMs) {
+            remoteTimeMs
+        } else {
+            spanStartMs
+        }
+        if (kotlin.math.abs(currentPos - targetPos) > 40L) {
+            videoPlayer.seekTo(targetPos)
+        }
+        viewModel.updateSyncPositionOnly(targetPos, videoDurationMs)
+        if (broadcast) {
+            viewModel.notifyPlayerStateChanged(
+                positionMs = targetPos,
+                durationMs = videoDurationMs,
+                speed = videoPlayer.playbackParameters.speed,
+            )
+        }
+    }
+
     // Handle remote commands from Desktop when not in fullscreen overlay
     LaunchedEffect(viewModel, videoPlayer, isVideoFullscreen) {
         if (isVideoFullscreen) return@LaunchedEffect
         viewModel.remoteSyncCommands.collect { command ->
-            val chosen = detectedEvents.filter { it.id in viewModel.selectedEventIds.value }
-            val span = if (chosen.isNotEmpty()) {
-                val start = chosen.minOf { it.startMs }.coerceAtLeast(0L)
-                val end = chosen.maxOf { it.endMs }.coerceAtLeast(start + 200L)
-                start to end
-            } else {
-                null
-            }
+            val span = viewModel.computeSelectedSpanMs(viewModel.selectedEventIds.value, videoDurationMs)
 
             when (command) {
                 is RemoteSyncCommand.Play -> {
-                    if (span != null && command.timeMs == null) {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
+                    if (span != null) {
                         eventPlayStartMs = span.first
                         eventPlayUntilMs = span.second
-                        val seekTo = (span.first - 500L).coerceAtLeast(0L)
-                        videoPlayer.seekTo(seekTo)
-                        viewModel.playVideo()
+                        val candidate = command.timeMs ?: videoPlayer.currentPosition.coerceAtLeast(0L)
+                        val seekTo = if (
+                            candidate < (span.first - 80L).coerceAtLeast(0L) ||
+                            candidate >= (span.second - 80L).coerceAtLeast(span.first)
+                        ) {
+                            span.first
+                        } else {
+                            candidate
+                        }
+                        if (kotlin.math.abs(videoPlayer.currentPosition - seekTo) > 80L) {
+                            videoPlayer.seekTo(seekTo)
+                        }
+                        viewModel.playVideo(positionMs = seekTo, broadcast = false)
                         videoPlayer.playWhenReady = true
                         videoPlayer.play()
                     } else {
+                        val targetPos = command.timeMs
+                            ?: if (videoPlayer.playbackState == Player.STATE_ENDED) 0L else videoPlayer.currentPosition.coerceAtLeast(0L)
                         if (command.timeMs != null && kotlin.math.abs(videoPlayer.currentPosition - command.timeMs) > 120L) {
                             videoPlayer.seekTo(command.timeMs)
                         } else if (videoPlayer.playbackState == Player.STATE_ENDED) {
                             videoPlayer.seekTo(0L)
                         }
-                        viewModel.playVideo()
+                        viewModel.playVideo(positionMs = targetPos, broadcast = false)
                         videoPlayer.playWhenReady = true
                         videoPlayer.play()
                     }
                 }
                 is RemoteSyncCommand.Pause -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
+                    videoPlayer.playWhenReady = false
                     videoPlayer.pause()
-                    viewModel.pauseVideo()
+                    val targetPos = command.timeMs ?: videoPlayer.currentPosition.coerceAtLeast(0L)
                     if (command.timeMs != null && kotlin.math.abs(videoPlayer.currentPosition - command.timeMs) > 80L) {
                         videoPlayer.seekTo(command.timeMs)
                     }
-                    viewModel.notifyPlayerStateChanged(
-                        positionMs = command.timeMs ?: videoPlayer.currentPosition.coerceAtLeast(0L),
-                        durationMs = videoDurationMs,
-                        speed = videoPlayer.playbackParameters.speed,
-                    )
+                    viewModel.pauseVideo(positionMs = targetPos, broadcast = false)
                 }
                 is RemoteSyncCommand.Seek -> {
-                    val target = command.timeMs.coerceAtLeast(0L)
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
+                    val rawTarget = command.timeMs.coerceAtLeast(0L)
+                    val target = if (
+                        span != null &&
+                        (rawTarget < (span.first - 15L).coerceAtLeast(0L) || rawTarget > span.second + 15L)
+                    ) {
+                        span.first
+                    } else {
+                        rawTarget
+                    }
+                    if (span != null) {
+                        eventPlayStartMs = span.first
+                        eventPlayUntilMs = span.second
+                    }
                     videoPlayer.seekTo(target)
-                    viewModel.onVideoPlaybackPosition(target.toInt(), videoDurationMs)
-                    viewModel.notifyPlayerStateChanged(
-                        positionMs = target,
-                        durationMs = videoDurationMs,
-                        speed = videoPlayer.playbackParameters.speed,
-                    )
+                    viewModel.updateSyncPositionOnly(target, videoDurationMs)
                 }
                 is RemoteSyncCommand.SetSpeed -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
                     videoPlayer.setPlaybackSpeed(command.speed)
-                    viewModel.notifyPlayerStateChanged(
-                        positionMs = videoPlayer.currentPosition.coerceAtLeast(0L),
-                        durationMs = videoDurationMs,
-                        speed = command.speed,
-                    )
                 }
                 is RemoteSyncCommand.SelectAlgorithm -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
                     val algo = CompareAlgorithm.all.firstOrNull { it.id.equals(command.algorithmId, ignoreCase = true) }
                     if (algo != null && compareSlots[algo]?.isReady == true) {
                         if (span != null) {
                             eventPlayStartMs = span.first
                             eventPlayUntilMs = span.second
-                            viewModel.switchCompareSlot(algo, span.first, syncNow = false)
-                            val seekTo = (span.first - 500L).coerceAtLeast(0L)
-                            videoPlayer.seekTo(seekTo)
-                            viewModel.playVideo()
+                            viewModel.switchCompareSlot(algo, span.first, syncNow = false, broadcast = false)
+                            if (kotlin.math.abs(videoPlayer.currentPosition - span.first) > 80L) {
+                                videoPlayer.seekTo(span.first)
+                            }
+                            viewModel.playVideo(positionMs = span.first, broadcast = false)
                             videoPlayer.playWhenReady = true
                             videoPlayer.play()
                         } else {
-                            viewModel.switchCompareSlot(algo, videoPlayer.currentPosition.coerceAtLeast(0L))
+                            viewModel.switchCompareSlot(
+                                algo,
+                                videoPlayer.currentPosition.coerceAtLeast(0L),
+                                syncNow = false,
+                                broadcast = false,
+                            )
                         }
                     }
                 }
                 is RemoteSyncCommand.ToggleEvent -> {
-                    val next = viewModel.toggleSelectedEvent(command.eventId, broadcast = true)
-                    eventPlayStartMs = null
-                    eventPlayUntilMs = null
-                    if (next.isEmpty()) {
-                        videoPlayer.seekTo(0L)
-                        viewModel.playVideo()
-                        videoPlayer.playWhenReady = true
-                        videoPlayer.play()
-                    } else if (!videoPlayer.isPlaying) {
-                        val start = detectedEvents.filter { it.id in next }.minOfOrNull { it.startMs }?.coerceAtLeast(0L) ?: 0L
-                        videoPlayer.seekTo(start)
-                        viewModel.notifyPlayerStateChanged(positionMs = start, durationMs = videoDurationMs)
-                    }
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
+                    val next = viewModel.toggleSelectedEvent(command.eventId, broadcast = false)
+                    applyDiagnosticEventSelectionChange(next, broadcast = false)
                 }
                 is RemoteSyncCommand.SetSelectedEvents -> {
-                    viewModel.setSelectedEventIds(command.eventIds, broadcast = true)
-                    val next = viewModel.selectedEventIds.value
-                    eventPlayStartMs = null
-                    eventPlayUntilMs = null
-                    if (next.isEmpty()) {
-                        videoPlayer.seekTo(0L)
-                        viewModel.playVideo()
-                        videoPlayer.playWhenReady = true
-                        videoPlayer.play()
-                    } else if (!videoPlayer.isPlaying) {
-                        val start = detectedEvents.filter { it.id in next }.minOfOrNull { it.startMs }?.coerceAtLeast(0L) ?: 0L
-                        videoPlayer.seekTo(start)
-                        viewModel.notifyPlayerStateChanged(positionMs = start, durationMs = videoDurationMs)
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
+                    viewModel.setSelectedEventIds(command.eventIds, broadcast = false)
+                    applyDiagnosticEventSelectionChange(viewModel.selectedEventIds.value, command.timeMs, broadcast = false)
+                }
+                is RemoteSyncCommand.UpdatePlaybackSettings -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
+                    if (viewModel.selectedEventIds.value.isNotEmpty()) {
+                        applyDiagnosticEventSelectionChange(viewModel.selectedEventIds.value, broadcast = false)
                     }
                 }
+                is RemoteSyncCommand.SetRatingSession -> {
+                    // Handled at ViewModel level
+                }
                 is RemoteSyncCommand.LoadBundle -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
                     eventPlayStartMs = null
                     eventPlayUntilMs = null
+                    videoPlayer.playWhenReady = false
                     videoPlayer.pause()
-                    viewModel.pauseVideo()
-                    viewModel.loadBundleById(command.bundleId)
+                    viewModel.pauseVideo(broadcast = false)
+                    viewModel.loadBundleById(command.bundleId, command.eventFileName)
+                }
+                is RemoteSyncCommand.SelectEventFile -> {
+                    eventPlayStartMs = null
+                    eventPlayUntilMs = null
+                    viewModel.selectEventFile(command.fileName, broadcast = false)
+                }
+                is RemoteSyncCommand.DeleteEventFile -> {
+                    eventPlayStartMs = null
+                    eventPlayUntilMs = null
+                    viewModel.deleteEventFile(command.fileName, broadcast = false)
                 }
                 is RemoteSyncCommand.ClearMedia -> {
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 600L
                     eventPlayStartMs = null
                     eventPlayUntilMs = null
+                    videoPlayer.playWhenReady = false
                     videoPlayer.stop()
                     videoPlayer.clearMediaItems()
                     loadedVideoUri = null
@@ -391,28 +502,45 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
         }
     }
 
-    LaunchedEffect(videoPlaying, loadedVideoUri, selectedHapticTrackName, isVideoFullscreen, eventPlayStartMs, eventPlayUntilMs) {
+    LaunchedEffect(
+        videoPlaying,
+        loadedVideoUri,
+        selectedHapticTrackName,
+        isVideoFullscreen,
+        eventPlayStartMs,
+        eventPlayUntilMs,
+        selectedEventIds,
+        eventHeadroomMs,
+        eventTailroomMs,
+    ) {
         if (!videoPlaying || isVideoFullscreen) return@LaunchedEffect
         var armed = false
         while (isActive && videoPlaying) {
             val pos = videoPlayer.currentPosition.coerceAtLeast(0L)
-            val until = eventPlayUntilMs
-            val start = eventPlayStartMs
+            val activeSpan = viewModel.computeSelectedSpanMs(selectedEventIds, videoDurationMs)
+            val until = activeSpan?.second ?: eventPlayUntilMs
+            val start = activeSpan?.first ?: eventPlayStartMs
             if (until != null && start != null) {
-                if (!armed && pos + 250L >= start) armed = true
+                if (!armed && pos in (start - 80L)..(start + 400L)) armed = true
                 if (armed && pos >= until) {
-                    eventPlayStartMs = null
-                    eventPlayUntilMs = null
+                    if (activeSpan == null) {
+                        eventPlayStartMs = null
+                        eventPlayUntilMs = null
+                    }
+                    suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
+                    videoPlayer.playWhenReady = false
                     videoPlayer.pause()
-                    viewModel.pauseVideo()
-                    viewModel.notifyPlayerStateChanged(positionMs = until, durationMs = videoDurationMs)
+                    videoPlayer.seekTo(start)
+                    viewModel.pauseVideo(positionMs = start, broadcast = true)
                     return@LaunchedEffect
                 }
             }
-            viewModel.onVideoPlaybackPosition(
-                positionMs = pos.toInt(),
-                videoDurationMs = videoDurationMs,
-            )
+            if (videoPlayer.isPlaying && videoPlayer.playbackState == Player.STATE_READY) {
+                viewModel.onVideoPlaybackPosition(
+                    positionMs = pos.toInt(),
+                    videoDurationMs = videoDurationMs,
+                )
+            }
             delay(20)
         }
     }
@@ -490,6 +618,20 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                     amplitude = amplitude,
                     hasAmplitude = hasAmplitude,
                     onAmplitudeChange = viewModel::setAmplitude,
+                    headroomMs = eventHeadroomMs,
+                    tailroomMs = eventTailroomMs,
+                    onHeadroomChange = { ms ->
+                        viewModel.setEventHeadroomMs(ms, broadcast = true)
+                        if (!isVideoFullscreen && selectedEventIds.isNotEmpty()) {
+                            applyDiagnosticEventSelectionChange(selectedEventIds)
+                        }
+                    },
+                    onTailroomChange = { ms ->
+                        viewModel.setEventTailroomMs(ms, broadcast = true)
+                        if (!isVideoFullscreen && selectedEventIds.isNotEmpty()) {
+                            applyDiagnosticEventSelectionChange(selectedEventIds)
+                        }
+                    },
                 )
 
                 when (AppTab.entries[selectedTab]) {
@@ -500,6 +642,9 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                         hapticTrackLoading = hapticTrackLoading,
                         compareSlots = compareSlots,
                         activeCompareAlgorithm = activeCompareAlgorithm,
+                        availableEventFiles = availableEventFiles,
+                        activeEventFileName = activeEventFileName,
+                        eventCount = detectedEvents.size,
                         canPlayVideo = canPlayVideo,
                         videoPlaying = videoPlaying,
                         videoPrepared = videoPrepared,
@@ -519,25 +664,68 @@ fun HapticDiagnosticScreen(viewModel: HapticViewModel) {
                             openCompareLauncher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/*"))
                         },
                         onSwitchCompareSlot = { algorithm ->
-                            viewModel.switchCompareSlot(algorithm, videoPlayer.currentPosition)
+                            suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
+                            val span = viewModel.computeSelectedSpanMs(selectedEventIds, videoDurationMs)
+                            if (span != null) {
+                                eventPlayStartMs = span.first
+                                eventPlayUntilMs = span.second
+                                viewModel.switchCompareSlot(algorithm, span.first, syncNow = false, broadcast = false)
+                                if (kotlin.math.abs(videoPlayer.currentPosition - span.first) > 80L) {
+                                    videoPlayer.seekTo(span.first)
+                                }
+                                viewModel.playVideo(positionMs = span.first, broadcast = true)
+                                videoPlayer.playWhenReady = true
+                                videoPlayer.play()
+                            } else {
+                                viewModel.switchCompareSlot(algorithm, videoPlayer.currentPosition.coerceAtLeast(0L))
+                            }
+                        },
+                        onSelectEventFile = { fileName ->
+                            eventPlayStartMs = null
+                            eventPlayUntilMs = null
+                            viewModel.selectEventFile(fileName, broadcast = true)
                         },
                         onPlayVideo = {
-                            viewModel.playVideo()
+                            suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
+                            val span = viewModel.computeSelectedSpanMs(selectedEventIds, videoDurationMs)
+                            var playPos = videoPlayer.currentPosition.coerceAtLeast(0L)
+                            if (span != null) {
+                                eventPlayStartMs = span.first
+                                eventPlayUntilMs = span.second
+                                val cur = videoPlayer.currentPosition.coerceAtLeast(0L)
+                                if (
+                                    cur < (span.first - 80L).coerceAtLeast(0L) ||
+                                    cur >= (span.second - 80L).coerceAtLeast(span.first)
+                                ) {
+                                    playPos = span.first
+                                    if (kotlin.math.abs(cur - span.first) > 80L) {
+                                        videoPlayer.seekTo(span.first)
+                                    }
+                                }
+                            }
+                            viewModel.playVideo(positionMs = playPos, broadcast = true)
                             videoPlayer.playWhenReady = true
                             videoPlayer.play()
                         },
                         onPauseVideo = {
+                            suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
+                            videoPlayer.playWhenReady = false
                             videoPlayer.pause()
-                            viewModel.pauseVideo()
+                            viewModel.pauseVideo(positionMs = videoPlayer.currentPosition.coerceAtLeast(0L), broadcast = true)
                         },
                         onStopVideo = {
+                            suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
+                            videoPlayer.playWhenReady = false
                             videoPlayer.pause()
-                            videoPlayer.seekTo(0)
+                            val span = viewModel.computeSelectedSpanMs(selectedEventIds, videoDurationMs)
+                            val resetPos = span?.first ?: 0L
+                            videoPlayer.seekTo(resetPos)
                             viewModel.stopVideo()
                         },
                         onFullscreen = {
                             if (loadedVideoUri == null) return@VideoTab
                             if (!videoPlaying) {
+                                suppressRemoteSyncEchoUntilMs = SystemClock.elapsedRealtime() + 1200L
                                 viewModel.playVideo()
                                 videoPlayer.playWhenReady = true
                                 videoPlayer.play()
@@ -813,6 +1001,10 @@ private fun IntensityCapCard(
     amplitude: Int,
     hasAmplitude: Boolean,
     onAmplitudeChange: (Int) -> Unit,
+    headroomMs: Long,
+    tailroomMs: Long,
+    onHeadroomChange: (Long) -> Unit,
+    onTailroomChange: (Long) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -839,6 +1031,93 @@ private fun IntensityCapCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)),
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Event Headroom & Tailroom",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                TextButton(
+                    onClick = {
+                        onHeadroomChange(500L)
+                        onTailroomChange(0L)
+                    },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                ) {
+                    Text("Reset", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Headroom (Before Event)",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = "%.2fs (%d ms)".format(headroomMs / 1000f, headroomMs),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Slider(
+                value = headroomMs.toFloat(),
+                onValueChange = { raw ->
+                    val stepped = ((raw / 50f).toInt() * 50L).coerceIn(0L, 5000L)
+                    onHeadroomChange(stepped)
+                },
+                valueRange = 0f..5000f,
+                steps = 99,
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Tailroom (After Event)",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = "%.2fs (%d ms)".format(tailroomMs / 1000f, tailroomMs),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Slider(
+                value = tailroomMs.toFloat(),
+                onValueChange = { raw ->
+                    val stepped = ((raw / 50f).toInt() * 50L).coerceIn(0L, 5000L)
+                    onTailroomChange(stepped)
+                },
+                valueRange = 0f..5000f,
+                steps = 99,
+            )
+            Text(
+                text = "Starts playback before event start and stops after event end when events are selected.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+            )
         }
     }
 }
@@ -852,6 +1131,9 @@ private fun VideoTab(
     hapticTrackLoading: Boolean,
     compareSlots: Map<CompareAlgorithm, CompareSlotState>,
     activeCompareAlgorithm: CompareAlgorithm?,
+    availableEventFiles: List<String>,
+    activeEventFileName: String,
+    eventCount: Int,
     canPlayVideo: Boolean,
     videoPlaying: Boolean,
     videoPrepared: Boolean,
@@ -868,6 +1150,7 @@ private fun VideoTab(
     onSelectWav: () -> Unit,
     onLoadCompareSlot: (CompareAlgorithm) -> Unit,
     onSwitchCompareSlot: (CompareAlgorithm) -> Unit,
+    onSelectEventFile: (String) -> Unit,
     onPlayVideo: () -> Unit,
     onPauseVideo: () -> Unit,
     onStopVideo: () -> Unit,
@@ -876,6 +1159,8 @@ private fun VideoTab(
     onOpenLibrary: () -> Unit,
     onSaveLibrary: () -> Unit,
 ) {
+    var eventDropdownExpanded by remember { mutableStateOf(false) }
+
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Synced Video Playback", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -905,6 +1190,41 @@ private fun VideoTab(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("Save Current Files to Library")
+            }
+
+            if (availableEventFiles.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Events ($eventCount):",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Box {
+                        OutlinedButton(
+                            onClick = { eventDropdownExpanded = true },
+                        ) {
+                            Text("${formatEventFileDisplayName(activeEventFileName)} ▾")
+                        }
+                        DropdownMenu(
+                            expanded = eventDropdownExpanded,
+                            onDismissRequest = { eventDropdownExpanded = false },
+                        ) {
+                            availableEventFiles.forEach { fileName ->
+                                DropdownMenuItem(
+                                    text = { Text(formatEventFileDisplayName(fileName)) },
+                                    onClick = {
+                                        eventDropdownExpanded = false
+                                        onSelectEventFile(fileName)
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             Text("Algorithm compare (WAV)", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
